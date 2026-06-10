@@ -24,6 +24,14 @@ async def get_current_user(
     if not user_id:
         raise NotAuthenticatedException()
 
+    # Reject sessions that pre-date the current server boot.
+    # app.state.boot_nonce is regenerated fresh on every startup, so any
+    # cookie issued before this deploy carries a stale nonce and is rejected.
+    expected_nonce = getattr(request.app.state, "boot_nonce", None)
+    if expected_nonce and request.session.get("boot_nonce") != expected_nonce:
+        request.session.clear()
+        raise NotAuthenticatedException()
+
     user = await user_repo.get_by_id(db, user_id)
     if not user:
         request.session.clear()
