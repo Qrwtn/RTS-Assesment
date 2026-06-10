@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 
 FINNHUB_BASE = "https://finnhub.io/api/v1"
 YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
+YAHOO_SEARCH_URL = "https://query1.finance.yahoo.com/v1/finance/search"
 
 # ── Candle periods config (Yahoo Finance range/interval params) ───────────────
 _CANDLE_PERIODS = {
@@ -222,7 +223,7 @@ async def search_symbols(query: str) -> list[dict]:
     async with httpx.AsyncClient(headers=headers) as client:
         try:
             resp = await client.get(
-                "https://query1.finance.yahoo.com/v1/finance/search",
+                YAHOO_SEARCH_URL,
                 params={"q": query, "quotesCount": 10, "newsCount": 0, "enableFuzzyQuery": "false"},
                 timeout=5.0,
             )

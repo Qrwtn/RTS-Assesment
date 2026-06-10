@@ -199,7 +199,9 @@
 
       const items    = container.querySelectorAll('[data-sparkline]');
       const newCount = items.length;
-      const oldCount = parseInt(countEl.textContent) || 0;
+      // Read the logical count from data-count, not textContent, so mid-animation
+      // values from the page-load counter animation don't produce wrong direction.
+      const oldCount = parseInt(countEl.dataset.count ?? countEl.textContent) || 0;
 
       // Slot-machine scroll: old number exits in direction of change,
       // new number enters from the opposite side.
@@ -208,6 +210,7 @@
         const exitTo    = goingUp ? '-100%' : '100%';
         const enterFrom = goingUp ? '100%'  : '-100%';
 
+        countEl.dataset.count = newCount;  // update logical value immediately
         countEl.style.transition = 'transform 0.2s ease-in, opacity 0.2s ease-in';
         countEl.style.transform  = `translateY(${exitTo})`;
         countEl.style.opacity    = '0';
@@ -225,11 +228,16 @@
         }, 200);
       }
 
-      // Keep watchlistSymbols in sync so the comparison chart reflects
-      // the current watchlist without a page reload.
+      // Keep watchlistSymbols and watchlistChanges in sync so the comparison
+      // chart reflects the current watchlist without a page reload.
       if (typeof watchlistSymbols !== 'undefined') {
         watchlistSymbols.length = 0;
         items.forEach(el => watchlistSymbols.push(el.dataset.sparkline));
+
+        if (typeof watchlistChanges !== 'undefined') {
+          watchlistChanges.length = 0;
+          items.forEach(el => watchlistChanges.push(parseFloat(el.dataset.change ?? 0)));
+        }
 
         // Re-render the comparison chart if it's currently showing watchlist mode
         if (typeof chartMode !== 'undefined' && chartMode === 'watchlist') {
@@ -255,7 +263,6 @@
     }
 
     document.addEventListener('htmx:afterSwap', function(evt) {
-      if (typeof lucide !== 'undefined') lucide.createIcons();
       if (evt.detail.target.id === 'watchlist-inner') _afterWatchlistSwap(evt.detail.target);
     });
 

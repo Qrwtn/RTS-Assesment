@@ -16,14 +16,12 @@ async def get_redis() -> aioredis.Redis:
 
 
 async def cache_get(key: str) -> Any | None:
-    """Return cached value or None on miss."""
     r = await get_redis()
     value = await r.get(key)
     return json.loads(value) if value else None
 
 
 async def cache_set(key: str, value: Any, ttl: int = 60) -> None:
-    """Store value with TTL in seconds."""
     r = await get_redis()
     await r.setex(key, ttl, json.dumps(value))
 

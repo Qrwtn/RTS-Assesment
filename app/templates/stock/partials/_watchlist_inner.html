@@ -9,7 +9,7 @@
         {{ fav.symbol }}
       </button>
     </form>
-    <span class="sparkline-cell mx-2 flex-shrink-0" data-sparkline="{{ fav.symbol }}">
+    <span class="sparkline-cell mx-2 flex-shrink-0" data-sparkline="{{ fav.symbol }}" data-change="{{ fav.percent_change if fav.percent_change is not none else 0 }}">
       <svg width="64" height="24" viewBox="0 0 64 24" class="opacity-20">
         <line x1="0" y1="12" x2="64" y2="12" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2"/>
       </svg>

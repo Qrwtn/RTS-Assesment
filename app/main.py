@@ -25,8 +25,6 @@ from app.modules.stock.router import router as stock_router
 async def lifespan(app: FastAPI):
     await init_db()
     # Generate a fresh nonce every time the process starts.
-    # Sessions that pre-date this boot carry a different nonce and are rejected,
-    # forcing re-login — this prevents stale sessions from surviving restarts/deploys.
     app.state.boot_nonce = secrets.token_hex(16)
     yield
 
@@ -71,8 +69,8 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
     https_only=settings.ENVIRONMENT == "production",
-    same_site="lax",       # explicit: lax blocks CSRF from cross-site navigations
-    max_age=86400,         # 24-hour session lifetime
+    same_site="lax",
+    max_age=86400,
 )
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
