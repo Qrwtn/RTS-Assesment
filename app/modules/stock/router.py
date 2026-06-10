@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Form, Path, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -8,7 +9,7 @@ from app.middleware.csrf import csrf_protect
 from app.middleware.auth_guard import get_current_user
 from app.modules.stock import service as stock_svc
 from app.modules.user import repository as user_repo
-from app.modules.user.models import User
+from app.modules.user.models import User, UserFavorite
 from app.templates import templates
 
 # Must match id="star-form" in stock/partials/_star_button.html
