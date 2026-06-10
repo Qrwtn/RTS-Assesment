@@ -1,4 +1,4 @@
-# Market Watch — AI-Powered Stock Tracker
+# RTS Labs code assesment
 
 [![CI](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/ci.yml/badge.svg)](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/codeql.yml/badge.svg)](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/codeql.yml)
@@ -6,22 +6,22 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
 ![Deployed on Railway](https://img.shields.io/badge/deployed-Railway-8B5CF6?logo=railway&logoColor=white)
 
-A full-stack stock market intelligence platform built as a Senior Software Engineer assessment for **RTS Labs**. Users can look up real-time quotes, track a personal watchlist, view price history charts, and receive AI-generated analysis powered by Claude — all behind secure authentication with optional 2FA.
+A full-stack stock market intelligence platform built for the Senior Software Engineer assessment for **RTS Labs**. Users can look up real-time quotes, track a personal watchlist, view price history charts, and receive AI-generated analysis powered by Claude and soured by reddit. It also includes an optional 2FA as security.
 
 ---
 
 ## Features
 
-- **Real-time quotes** — live price, OHLC breakdown, % change, and peer tickers via Finnhub
-- **Interactive price chart** — 1D / 1W / 1M / 6M / 1Y price history from Yahoo Finance with animated OHLC values that update per timeframe
-- **AI stock analysis** — per-symbol Analysis tab combining analyst price targets (Yahoo Finance), recent news headlines (Finnhub), Reddit mention trends (ApeWisdom), and a Claude Haiku narrative summary; cached 1 hour
-- **AI market buzz** — global Reddit sentiment widget summarised by Claude, covering r/wallstreetbets and r/stocks; rendered as markdown
-- **Personal watchlist** — star any stock to track it; sparklines on each row; live prices on page load
-- **Paper portfolio** — automatic realised/unrealised P&L tracking from the moment a stock is starred, benchmarked against SPY
-- **Secure authentication** — bcrypt password hashing, session fixation prevention, CSRF double-submit tokens on all forms, rate-limited login and signup
-- **TOTP 2FA** — optional time-based one-time passwords with QR code enrolment
-- **Live market ticker** — animated top-bar ticker pulling from a cached batch of symbols
-- **Keyboard shortcut** — press `/` anywhere to jump to the search bar
+- **Real-time quotes**: live price, OHLC breakdown, % change, and peer tickers via Finnhub
+- **Interactive price chart**: 1D / 1W / 1M / 6M / 1Y price history from Yahoo Finance with animated OHLC values that update per timeframe
+- **AI stock analysis**: per-symbol Analysis tab combining analyst price targets (Yahoo Finance), recent news headlines (Finnhub), Reddit mention trends (ApeWisdom), and a Claude Haiku narrative summary; cached 1 hour
+- **AI market buzz**: global Reddit sentiment widget summarised by Claude, covering r/wallstreetbets and r/stocks; rendered as markdown
+- **Personal watchlist**: star any stock to track it; sparklines on each row; live prices on page load
+- **Paper portfolio**: automatic realised/unrealised P&L tracking from the moment a stock is starred, benchmarked against SPY
+- **Secure authentication**: bcrypt password hashing, session fixation prevention, CSRF double-submit tokens on all forms, rate-limited login and signup
+- **TOTP 2FA**: optional time-based one-time passwords with QR code enrollment
+- **Live market ticker**: animated top-bar ticker pulling from a cached batch of symbols
+- **Keyboard shortcut**: press `/` anywhere to jump to the search bar
 
 ---
 
@@ -72,7 +72,7 @@ FastAPI (Uvicorn ASGI)
         └── Anthropic API     ← Claude Haiku (AI narrative, market buzz summary)
 ```
 
-Concurrent external API calls use `asyncio.gather` so chart data, AI analysis, and Reddit sentiment all fetch in parallel rather than sequentially.
+Concurrent external API calls use `asyncio.gather`. Chart data, AI analysis, and Reddit sentiment all fetch in parallel rather than sequentially.
 
 ---
 
@@ -188,14 +188,17 @@ See `.env.example` for the full template. **Never commit `.env`.**
 └── .env.example                 # environment variable template with placeholder values
 ```
 
+## CICD Pipeline
+
+![img.png](img.png)
+
 ---
 
 ## Testing
 
-Tests run against a **real PostgreSQL database** — no SQLite, no mocking the ORM. Each test gets an isolated session that rolls back after completion, keeping tests independent and fast.
+Tests run against a **real PostgreSQL database**. No SQLite, no mocking the ORM. Each test gets an isolated session that rolls back after completion, keeping tests independent.
 
 ```bash
-make install      # install dependencies first (includes pytest, pytest-asyncio, httpx)
 make test-db-up   # starts throwaway Postgres on port 5433
 make test         # runs full suite
 make test-db-down # removes the container
@@ -226,16 +229,16 @@ FastAPI's async-first design matches this workload: every request fans out to 2�
 passlib is a wrapper that adds abstraction at the cost of a harder dependency chain and occasional version conflicts. Using `bcrypt==4.2.0` directly is simpler, auditable, and explicit. The 72-byte input limit is enforced server-side to prevent a known bcrypt DoS vector.
 
 **Why Redis cache-aside instead of always querying live?**
-Finnhub's free tier is rate-limited. The most-used data — top movers, KPI summary, Reddit sentiment — changes at most every few minutes. A 5-minute TTL on quotes and 1-hour TTL on AI analysis gives a fast, consistent UX without burning API quota or adding latency on every page load.
+Finnhub's free tier is rate-limited. The most-used data such as top movers, KPI summary, Reddit sentiment all changes very frequently. A 5-minute TTL on quotes and 1-hour TTL on AI analysis gives a fast, consistent UX without burning API quota or adding latency on every page load.
 
 **Why double-submit CSRF instead of synchroniser tokens?**
-Synchroniser tokens require a DB or session read per request. Double-submit stores the token in the session (already in memory) and compares it to a hidden form field — zero additional I/O. This is the approach used by Django, Rails, and Spring Security for the same reason.
+Synchroniser tokens require a DB or session read per request. Double-submit stores the token in the session (already in memory) and compares it to a hidden form field. Zero additional I/O. This is the approach used by Django, Rails, and Spring Security for the same reason.
 
 **Why Claude Haiku over GPT-4o-mini?**
-Haiku is faster (median ~400ms vs ~800ms), cheaper per token, and the task — synthesising 4 structured data points into 3–4 sentences — doesn't require a frontier model. Results are cached for 1 hour, so the cost per user is negligible even at scale.
+Haiku is faster (median ~400ms vs ~800ms), cheaper per token, and the task. The synthesising of 4 structured data points into 3–4 sentences doesn't require a frontier model. Results are cached for 1 hour, so the cost per user is negligible even at scale.
 
 **Why no Playwright UI tests?**
-For this scope, HTTP-layer tests give high signal with low infrastructure cost. Playwright requires a headed browser in CI, significantly increases test runtime, and primarily tests presentation rather than business logic. The ceiling on coverage is the frontend JS and templates — adding Playwright smoke tests would be the next step in a production project.
+For this scope, HTTP-layer tests give high signal with low infrastructure cost. Playwright requires a headed browser in CI, significantly increases test runtime, and primarily tests presentation rather than business logic. The ceiling on coverage is the frontend JS and templates. Adding Playwright smoke tests would be the next step in a production project.
 
 ---
 

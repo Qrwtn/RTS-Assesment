@@ -586,10 +586,10 @@ if (symbolInput) {
         acController = null;
         if (!data.results?.length) { suggestions.classList.add('hidden'); return; }
         suggestions.innerHTML = data.results.map(r =>
-          `<button type="button" data-sym="${r.symbol}" onclick="pickSymbol('${r.symbol}')"
+          `<button type="button" data-sym="${escapeHtml(r.symbol)}" onclick="pickSymbol(this.dataset.sym)"
             class="w-full text-left px-4 py-2.5 hover:bg-blue-50 flex items-center justify-between border-b border-slate-100 last:border-0 transition">
-            <span class="font-mono font-bold text-slate-800 text-sm">${r.symbol}</span>
-            <span class="text-xs text-slate-400 truncate ml-3 max-w-[160px]">${r.name}</span>
+            <span class="font-mono font-bold text-slate-800 text-sm">${escapeHtml(r.symbol)}</span>
+            <span class="text-xs text-slate-400 truncate ml-3 max-w-[160px]">${escapeHtml(r.name)}</span>
           </button>`
         ).join('');
         suggestions.classList.remove('hidden');
@@ -936,6 +936,18 @@ async function loadPortfolio() {
   }
 }
 
+// Escape untrusted strings before inserting into innerHTML.
+// Prevents XSS when data from external APIs (Yahoo Finance, Finnhub, etc.)
+// is rendered into the DOM.
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // Configure marked once (breaks: true → single \n becomes <br>)
 if (typeof marked !== 'undefined') {
   marked.use({ breaks: true, gfm: true });
@@ -1132,10 +1144,10 @@ async function loadAiInsights(symbol) {
       if (newsList) {
         newsList.innerHTML = d.news.map(n => `
           <li class="py-2 flex items-start gap-2">
-            <span class="text-xs text-slate-400 font-mono whitespace-nowrap mt-0.5">${n.date}</span>
-            <a href="${n.url}" target="_blank" rel="noopener"
+            <span class="text-xs text-slate-400 font-mono whitespace-nowrap mt-0.5">${escapeHtml(n.date)}</span>
+            <a href="${escapeHtml(n.url)}" target="_blank" rel="noopener noreferrer"
                class="text-xs text-slate-700 hover:text-blue-600 transition leading-snug">
-              ${n.headline}
+              ${escapeHtml(n.headline)}
             </a>
           </li>`).join('');
         newsList.classList.remove('hidden');
