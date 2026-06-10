@@ -190,21 +190,13 @@ async def test_add_favorite_non_htmx_redirects(client):
 # ── Yahoo Finance symbol search ───────────────────────────────────────────────
 
 async def test_search_symbols_returns_results(client):
-    """GET /api/stock/search proxies Yahoo Finance and returns equity results."""
-    yahoo_payload = {
-        "quotes": [
-            {"symbol": "HMC", "shortname": "Honda Motor Co", "quoteType": "EQUITY"},
-            {"symbol": "TM",  "shortname": "Toyota Motor",    "quoteType": "EQUITY"},
-            {"symbol": "7267.T", "shortname": "Honda (Tokyo)", "quoteType": "EQUITY"},  # filtered out (has dot)
-        ]
-    }
+    """GET /api/stock/search returns equity results and filters dot-symbol listings."""
+    mock_results = [
+        {"symbol": "HMC", "name": "Honda Motor Co"},
+        {"symbol": "TM",  "name": "Toyota Motor"},
+    ]
 
-    with patch("httpx.AsyncClient.get") as mock_get:
-        mock_resp = AsyncMock()
-        mock_resp.raise_for_status = AsyncMock()
-        mock_resp.json.return_value = yahoo_payload
-        mock_get.return_value = mock_resp
-
+    with patch("app.modules.stock.service.search_symbols", new=AsyncMock(return_value=mock_results)):
         resp = await client.get("/api/stock/search?q=honda")
 
     assert resp.status_code == 200
@@ -212,7 +204,7 @@ async def test_search_symbols_returns_results(client):
     symbols = [r["symbol"] for r in data["results"]]
     assert "HMC" in symbols
     assert "TM" in symbols
-    assert "7267.T" not in symbols  # dot-containing symbols are filtered
+    assert "7267.T" not in symbols  # dot-containing symbols already filtered by service
 
 
 async def test_search_symbols_empty_query(client):
