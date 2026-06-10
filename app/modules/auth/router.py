@@ -69,6 +69,7 @@ async def signup(
     user = await user_repo.create_user(db, email, hash_password(password))
     request.session.clear()
     request.session["user_id"] = user.id
+    request.session["boot_nonce"] = request.app.state.boot_nonce
     return RedirectResponse("/welcome", status_code=303)
 
 
@@ -120,6 +121,7 @@ async def login(
 
     request.session.clear()
     request.session["user_id"] = user.id
+    request.session["boot_nonce"] = request.app.state.boot_nonce
     return RedirectResponse("/dashboard", status_code=303)
 
 
@@ -156,6 +158,7 @@ async def verify_2fa(
 
     request.session.clear()
     request.session["user_id"] = user.id
+    request.session["boot_nonce"] = request.app.state.boot_nonce
     return RedirectResponse("/dashboard", status_code=303)
 
 

@@ -111,6 +111,11 @@ async def client(monkeypatch):
     from app.limiter import limiter
     limiter.reset()
 
+    # The lifespan doesn't run in tests, so boot_nonce is never set.
+    # Stamp a fixed nonce so auth_guard's check passes without erroring.
+    import secrets
+    app.state.boot_nonce = secrets.token_hex(16)
+
     # Override CSRF dependency — tests submit plain form data, no token needed
     async def _no_csrf():
         return None
