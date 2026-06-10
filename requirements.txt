@@ -10,7 +10,7 @@ pydantic-settings==2.14.1
 httpx==0.28.1
 redis[asyncio]==5.1.1
 pyotp==2.9.0
-qrcode[pil]==7.4.2
+qrcode[pil]==8.2
 slowapi==0.1.9
 anthropic==0.109.1
 pytest==8.3.3
