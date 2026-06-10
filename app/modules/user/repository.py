@@ -64,6 +64,13 @@ async def get_recent_searches(
     return list(result.scalars().all())
 
 
+async def get_favorites_by_user(db: AsyncSession, user_id: int) -> list[UserFavorite]:
+    result = await db.execute(
+        select(UserFavorite).where(UserFavorite.user_id == user_id)
+    )
+    return list(result.scalars().all())
+
+
 async def add_favorite(
     db: AsyncSession, user_id: int, symbol: str, price_at_add: float | None = None
 ) -> UserFavorite | None:
