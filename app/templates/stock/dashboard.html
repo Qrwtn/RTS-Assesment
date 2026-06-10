@@ -1,0 +1,1265 @@
+{% extends "base.html" %}
+{% block title %}{% if user %}Dashboard{% else %}StockApp — AI Market Intelligence{% endif %}{% endblock %}
+
+{% block content %}
+
+{# ═══════════════════════════════════════════════════════════════
+   LOGGED-IN DASHBOARD
+════════════════════════════════════════════════════════════════ #}
+{% if user %}
+
+<!-- KPI Header Cards -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 fade-in">
+  <div class="glass rounded-2xl border border-white/60 shadow-sm p-4">
+    <p class="text-xs text-slate-400 uppercase tracking-widest font-medium">Watchlist</p>
+    <p class="text-3xl font-bold text-slate-900 mt-1" data-kpi-int="{{ favorites|length }}">{{ favorites|length }}</p>
+    <p class="text-xs text-slate-400 mt-1">saved stocks</p>
+  </div>
+  <div class="glass rounded-2xl border border-white/60 shadow-sm p-4">
+    <p class="text-xs text-slate-400 uppercase tracking-widest font-medium">Biggest Mover</p>
+    {% if biggest_mover %}
+    <p class="text-2xl font-bold text-slate-900 mt-1 font-mono">{{ biggest_mover.symbol }}</p>
+    <p class="text-sm font-semibold text-emerald-600 mt-0.5" data-kpi-float="{{ biggest_mover.change }}">+{{ "%.2f"|format(biggest_mover.change) }}% today</p>
+    {% else %}
+    <p class="text-3xl font-bold text-slate-400 mt-1">—</p>
+    <p class="text-xs text-slate-400 mt-1">top gainer</p>
+    {% endif %}
+  </div>
+  <div class="glass rounded-2xl border border-white/60 shadow-sm p-4">
+    <p class="text-xs text-slate-400 uppercase tracking-widest font-medium">Trending</p>
+    <p class="text-2xl font-bold text-blue-600 mt-1 font-mono">{{ trending or '—' }}</p>
+    <p class="text-xs text-slate-400 mt-1">Reddit top pick</p>
+  </div>
+  <div class="glass rounded-2xl border border-white/60 shadow-sm p-4">
+    <p class="text-xs text-slate-400 uppercase tracking-widest font-medium">Market</p>
+    <p class="text-xl font-bold mt-1
+      {% if 'Bullish' in (market_mood or '') %}text-emerald-600
+      {% elif 'Bearish' in (market_mood or '') %}text-red-500
+      {% else %}text-slate-700{% endif %}">{{ market_mood or 'Mixed 📊' }}</p>
+    <p class="text-xs mt-1" id="marketStatusBadge"></p>
+  </div>
+</div>
+
+<!-- Main 2-col layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+  <!-- LEFT -->
+  <div class="lg:col-span-2 space-y-4">
+
+    <!-- Search -->
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest">Stock Lookup</h2>
+        <span class="text-xs text-slate-300 hidden sm:block">Press <kbd class="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-mono text-xs">/</kbd> to focus</span>
+      </div>
+      <form method="POST" action="/stock/lookup" id="lookupForm" class="flex gap-2">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+        <div class="relative flex-1">
+          <input type="text" name="symbol" id="symbolInput" required
+                 value="{{ result.symbol if result else '' }}"
+                 maxlength="10" autocomplete="off"
+                 class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/80"
+                 placeholder="AAPL, TSLA, NVDA…" />
+          <div id="searchSuggestions"
+               class="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl z-50 hidden mt-1 overflow-hidden"></div>
+        </div>
+        <button type="submit"
+                class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition whitespace-nowrap shadow-sm">
+          Look Up
+        </button>
+      </form>
+    </div>
+
+    <!-- ═══ QUOTE RESULT CARD — tabbed: Chart | Analysis | News ═══ -->
+    {% if result %}
+    <div class="glass border border-white/60 rounded-2xl shadow-sm fade-in">
+
+      <!-- Header: always visible -->
+      <div class="p-5 pb-0">
+        <div class="flex items-start justify-between flex-wrap gap-2 mb-4">
+          <div>
+            <span class="text-2xl font-bold text-slate-900 font-mono">{{ result.symbol }}</span>
+            <span id="currentPrice" class="ml-3 text-3xl font-bold {% if result.percent_change >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">
+              ${{ "%.2f"|format(result.current) }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            {% if is_favorited %}
+            <form method="POST" action="/stock/unfavorite/{{ result.symbol }}">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+              <button class="text-amber-400 hover:text-amber-500 transition" title="Remove from watchlist">
+                <i data-lucide="star" class="w-5 h-5" style="fill:currentColor"></i>
+              </button>
+            </form>
+            {% else %}
+            <form method="POST" action="/stock/favorite/{{ result.symbol }}">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+              <button class="text-slate-300 hover:text-amber-400 transition" title="Add to watchlist">
+                <i data-lucide="star" class="w-5 h-5"></i>
+              </button>
+            </form>
+            {% endif %}
+            <span id="pctBadge" class="px-3 py-1 rounded-full text-sm font-bold
+              {% if result.percent_change >= 0 %}bg-emerald-100 text-emerald-700{% else %}bg-red-100 text-red-600{% endif %}">
+              {% if result.percent_change >= 0 %}+{% endif %}{{ "%.2f"|format(result.percent_change) }}%
+            </span>
+          </div>
+        </div>
+
+        <!-- Tab bar -->
+        <div class="relative -mx-5 px-5 border-b border-slate-100" id="tabBar">
+          <div class="flex">
+            <button onclick="switchQuoteTab('chart')" id="tab-chart"
+                    class="quote-tab pb-2.5 mr-5 text-xs font-semibold text-blue-600 transition-colors duration-150 flex items-center gap-1">
+              <i data-lucide="line-chart" class="w-3.5 h-3.5"></i> Chart
+            </button>
+            <button onclick="switchQuoteTab('analysis')" id="tab-analysis"
+                    class="quote-tab pb-2.5 mr-5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors duration-150 flex items-center gap-1">
+              <i data-lucide="bot" class="w-3.5 h-3.5"></i> Analysis
+            </button>
+            <button onclick="switchQuoteTab('news')" id="tab-news"
+                    class="quote-tab pb-2.5 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors duration-150 flex items-center gap-1">
+              <i data-lucide="newspaper" class="w-3.5 h-3.5"></i> News
+            </button>
+            <span class="ml-auto pb-2.5 text-xs text-slate-400 italic" id="aiGeneratedAt"></span>
+          </div>
+          <!-- Animated sliding indicator -->
+          <div id="tabIndicator"
+               class="absolute bottom-0 h-0.5 bg-blue-600 rounded-full"
+               style="left:0;width:0;transition:left 0.22s cubic-bezier(.4,0,.2,1),width 0.22s cubic-bezier(.4,0,.2,1)">
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Chart tab panel ────────────────────────────────────── -->
+      <div id="panel-chart" class="p-5">
+        <!-- Period selector -->
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-xs text-slate-400 font-medium mr-1">Timeframe</span>
+          <div class="flex gap-1" id="chartPeriodBtns">
+            {% for p in ['1D', '1W', '1M', '6M', '1Y'] %}
+            <button onclick="onPeriodClick('{{ p }}')"
+                    id="chart-btn-{{ p }}"
+                    class="chart-btn text-xs px-2.5 py-1 rounded-full font-medium transition
+                    {% if p == '1D' %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-500 hover:bg-slate-200{% endif %}">
+              {{ p }}
+            </button>
+            {% endfor %}
+          </div>
+          <span id="periodDescription" class="ml-auto text-xs text-slate-400 italic">Today</span>
+          <span id="marketDot" class="hidden items-center gap-1 text-xs font-medium"></span>
+          <span id="chartPeriodLabel" class="text-xs text-slate-400 italic hidden"></span>
+          {% if favorites %}
+          <button id="watchlistBtn" onclick="switchToWatchlist()"
+                  class="text-xs text-blue-500 hover:text-blue-700 font-medium transition ml-2 flex items-center gap-1">
+            <i data-lucide="arrow-left" class="w-3 h-3"></i> Watchlist
+          </button>
+          {% endif %}
+        </div>
+
+        <!-- OHLC grid -->
+        <div class="grid grid-cols-4 gap-2 mb-4">
+          <div class="bg-slate-50/80 rounded-xl px-3 py-2 text-center">
+            <p class="text-xs text-slate-400 uppercase" id="label-open">Open</p>
+            <p class="font-semibold text-slate-800 text-sm" id="ohlc-open" data-value="{{ result.open or 0 }}">
+              ${{ "%.2f"|format(result.open or 0) }}
+            </p>
+          </div>
+          <div class="bg-emerald-50/80 rounded-xl px-3 py-2 text-center">
+            <p class="text-xs text-emerald-400 uppercase" id="label-high">High</p>
+            <p class="font-semibold text-emerald-600 text-sm" id="ohlc-high" data-value="{{ result.high or 0 }}">
+              ${{ "%.2f"|format(result.high or 0) }}
+            </p>
+          </div>
+          <div class="bg-red-50/80 rounded-xl px-3 py-2 text-center">
+            <p class="text-xs text-red-400 uppercase" id="label-low">Low</p>
+            <p class="font-semibold text-red-500 text-sm" id="ohlc-low" data-value="{{ result.low or 0 }}">
+              ${{ "%.2f"|format(result.low or 0) }}
+            </p>
+          </div>
+          <div class="bg-slate-50/80 rounded-xl px-3 py-2 text-center">
+            <p class="text-xs text-slate-400 uppercase" id="label-prev">Prev</p>
+            <p class="font-semibold text-slate-800 text-sm" id="ohlc-prev" data-value="{{ result.prev_close or 0 }}">
+              ${{ "%.2f"|format(result.prev_close or 0) }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Weekend/closed notice -->
+        <div id="marketClosedNotice" class="hidden mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm text-amber-700">
+          <i data-lucide="clock" class="w-4 h-4 flex-shrink-0"></i>
+          <span id="marketClosedText">Market is currently closed.</span>
+          <button onclick="onPeriodClick('1W')" class="ml-auto text-xs underline hover:no-underline">View 1W instead</button>
+        </div>
+
+        <!-- Chart canvas -->
+        <div class="relative" style="height:220px;">
+          <canvas id="stockChart"></canvas>
+          <div id="chartStatus" class="absolute inset-0 flex items-center justify-center">
+            <div class="flex items-center gap-2 text-slate-400 text-sm">
+              <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              Loading chart…
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Analysis tab panel ─────────────────────────────────── -->
+      <div id="panel-analysis" class="p-5 hidden">
+        <!-- Skeleton -->
+        <div id="aiSkeleton">
+          <div class="h-3 bg-slate-200 rounded animate-pulse mb-2 w-full"></div>
+          <div class="h-3 bg-slate-200 rounded animate-pulse mb-2 w-5/6"></div>
+          <div class="h-3 bg-slate-200 rounded animate-pulse mb-4 w-4/6"></div>
+          <div class="flex gap-2">
+            <div class="h-6 w-20 bg-slate-200 rounded-full animate-pulse"></div>
+            <div class="h-6 w-28 bg-slate-200 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+        <!-- Content -->
+        <div id="aiContent" class="hidden">
+          <div id="aiSummary" class="text-sm text-slate-700 leading-relaxed mb-4"></div>
+          <!-- Analyst targets -->
+          <div id="aiTargets" class="hidden mb-4">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+              <span id="aiRecommendation" class="text-xs font-bold px-2.5 py-1 rounded-full"></span>
+              <span class="text-xs text-slate-500">Mean target: <span id="aiMeanTarget" class="font-semibold text-slate-700"></span></span>
+              <span class="text-xs text-slate-400">Range: <span id="aiTargetRange" class="font-mono"></span></span>
+              <span class="text-xs text-slate-400" id="aiAnalystCount"></span>
+            </div>
+            <div class="relative h-2 bg-slate-100 rounded-full overflow-hidden mb-0.5">
+              <div id="aiTargetBar" class="absolute h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full transition-all duration-700" style="width:0%"></div>
+              <div id="aiCurrentMarker" class="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-slate-700 rounded-full border-2 border-white shadow" style="left:0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-400 mt-0.5">
+              <span id="aiLowLabel"></span>
+              <span id="aiHighLabel"></span>
+            </div>
+            <p id="aiEarnings" class="hidden text-xs text-slate-500 mt-2 flex items-center gap-1">
+              <i data-lucide="calendar" class="w-3 h-3"></i> Next earnings: <span id="aiEarningsDate" class="font-semibold text-slate-600"></span>
+            </p>
+          </div>
+          <!-- Reddit -->
+          <div id="aiReddit" class="hidden mb-4">
+            <span class="text-xs text-slate-500">
+              Reddit today: <span id="aiRedditMentions" class="font-semibold text-slate-700"></span> mentions
+              <span id="aiRedditTrend" class="ml-1"></span>
+            </span>
+          </div>
+        </div>
+        <p id="aiError" class="hidden text-xs text-slate-400 italic">AI analysis unavailable right now.</p>
+      </div>
+
+      <!-- ── News tab panel ─────────────────────────────────────── -->
+      <div id="panel-news" class="p-5 hidden">
+        <div id="newsTabSkeleton">
+          <div class="h-3 bg-slate-200 rounded animate-pulse mb-2 w-full"></div>
+          <div class="h-3 bg-slate-200 rounded animate-pulse mb-2 w-4/5"></div>
+          <div class="h-3 bg-slate-200 rounded animate-pulse w-3/5"></div>
+        </div>
+        <ul id="newsTabList" class="hidden divide-y divide-slate-50"></ul>
+        <p id="newsTabEmpty" class="hidden text-xs text-slate-400 italic">No recent news found.</p>
+      </div>
+
+      <!-- Peers: always visible below tabs -->
+      {% if peers %}
+      <div class="px-5 pb-5 border-t border-slate-50 pt-3">
+        <p class="text-xs text-slate-400 uppercase tracking-widest mb-2">Related</p>
+        <div class="flex flex-wrap gap-1.5">
+          {% for peer in peers %}
+          <form method="POST" action="/stock/lookup">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+            <input type="hidden" name="symbol" value="{{ peer }}" />
+            <button type="submit"
+                    class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-mono font-bold px-2.5 py-1 rounded-full transition border border-blue-100">
+              {{ peer }}
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- ═══ WATCHLIST CHART — only when no result lookup active ═══ -->
+    {% if not result and favorites %}
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5 fade-in" id="chartSection">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-widest" id="chartTitle">Watchlist Overview</h3>
+          <span id="marketDot" class="hidden items-center gap-1 text-xs font-medium"></span>
+        </div>
+        <div class="flex gap-1" id="chartPeriodBtns">
+          {% for p in ['1D', '1W', '1M', '6M', '1Y'] %}
+          <button onclick="onPeriodClick('{{ p }}')"
+                  id="chart-btn-{{ p }}"
+                  class="chart-btn text-xs px-2.5 py-1 rounded-full font-medium transition
+                  {% if p == '1M' %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-500 hover:bg-slate-200{% endif %}">
+            {{ p }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+      <div id="marketClosedNotice" class="hidden mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm text-amber-700">
+        <span>🕐</span>
+        <span id="marketClosedText">Market is currently closed.</span>
+        <button onclick="onPeriodClick('1W')" class="ml-auto text-xs underline hover:no-underline">View 1W instead</button>
+      </div>
+      <div class="relative" style="height:220px;">
+        <canvas id="stockChart"></canvas>
+        <div id="chartStatus" class="absolute inset-0 flex items-center justify-center">
+          <div class="flex items-center gap-2 text-slate-400 text-sm">
+            <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            Loading chart…
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent search history -->
+    {% if recent_searches %}
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5">
+      <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Recent Lookups</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-xs text-slate-400 uppercase tracking-widest border-b border-slate-100">
+              <th class="pb-2 text-left font-medium">Symbol</th>
+              <th class="pb-2 text-right font-medium">Price</th>
+              <th class="pb-2 text-right font-medium">Change</th>
+              <th class="pb-2 text-right font-medium hidden sm:table-cell">When</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-50">
+            {% for s in recent_searches %}
+            <tr class="hover:bg-white/60 transition group">
+              <td class="py-2 font-mono font-bold text-slate-800">
+                <form method="POST" action="/stock/lookup" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+                  <input type="hidden" name="symbol" value="{{ s.symbol }}" />
+                  <button type="submit" class="group-hover:text-blue-600 transition">{{ s.symbol }}</button>
+                </form>
+              </td>
+              <td class="py-2 text-right text-slate-700">${{ "%.2f"|format(s.current_price) }}</td>
+              <td class="py-2 text-right font-semibold {% if s.percent_change >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">
+                {% if s.percent_change >= 0 %}+{% endif %}{{ "%.2f"|format(s.percent_change) }}%
+              </td>
+              <td class="py-2 text-right text-slate-400 text-xs hidden sm:table-cell">
+                {{ s.searched_at.strftime('%b %d, %H:%M') }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+  </div><!-- /left -->
+
+  <!-- RIGHT: watchlist + reddit -->
+  <div class="space-y-4">
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5">
+      <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+        <i data-lucide="star" class="w-3 h-3"></i> Watchlist
+      </h2>
+      {% if favorites %}
+      <div class="space-y-1.5" id="watchlistItems">
+        {% for fav in favorites %}
+        <div class="flex items-center justify-between bg-white/60 hover:bg-white/80 rounded-xl px-3 py-2 transition">
+          <form method="POST" action="/stock/lookup" class="flex-1 min-w-0">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+            <input type="hidden" name="symbol" value="{{ fav.symbol }}" />
+            <button type="submit" class="font-mono font-bold text-slate-800 hover:text-blue-600 transition text-sm truncate">
+              {{ fav.symbol }}
+            </button>
+          </form>
+          <span class="sparkline-cell mx-2 flex-shrink-0" data-sparkline="{{ fav.symbol }}">
+            <svg width="64" height="24" viewBox="0 0 64 24" class="opacity-20">
+              <line x1="0" y1="12" x2="64" y2="12" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2"/>
+            </svg>
+          </span>
+          {% if fav.current is not none %}
+          <span class="text-sm font-semibold {% if fav.percent_change >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">
+            ${{ "%.2f"|format(fav.current) }}
+          </span>
+          <span class="text-xs ml-1 {% if fav.percent_change >= 0 %}text-emerald-500{% else %}text-red-400{% endif %}">
+            {% if fav.percent_change >= 0 %}+{% endif %}{{ "%.2f"|format(fav.percent_change) }}%
+          </span>
+          {% endif %}
+          <form method="POST" action="/stock/unfavorite/{{ fav.symbol }}" class="ml-2">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+            <button class="text-slate-300 hover:text-red-400 transition">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-slate-400">Search a stock and click the star to track it here.</p>
+      {% endif %}
+    </div>
+
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+            <i data-lucide="zap" class="w-3 h-3"></i> AI Market Buzz
+          </h2>
+        <div class="flex gap-1">
+          <button onclick="loadReddit('day')" id="btn-day"
+                  class="reddit-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-blue-600 text-white">Today</button>
+          <button onclick="loadReddit('week')" id="btn-week"
+                  class="reddit-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-slate-100 text-slate-500 hover:bg-slate-200">Week</button>
+        </div>
+      </div>
+      <div id="reddit-content" class="text-sm text-slate-600 leading-relaxed min-h-[80px]">
+        <div class="flex items-center gap-2 text-slate-400">
+          <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Loading…
+        </div>
+      </div>
+      <p class="text-xs text-slate-300 mt-3">r/wallstreetbets + r/stocks · Claude AI</p>
+    </div>
+
+    <!-- ── Paper Portfolio Widget ── -->
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5" id="portfolioWidget">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+            <i data-lucide="pie-chart" class="w-3 h-3"></i> Paper Portfolio
+          </h2>
+        <span id="portfolioBeatBadge" class="hidden text-xs font-bold px-2 py-0.5 rounded-full"></span>
+      </div>
+
+      <!-- Headline numbers -->
+      <div id="portfolioSummary" class="grid grid-cols-2 gap-2 mb-4">
+        <div class="bg-slate-50/80 rounded-xl p-3 text-center">
+          <p class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">My Picks</p>
+          <p class="text-xl font-bold" id="portfolioAvgReturn">—</p>
+        </div>
+        <div class="bg-slate-50/80 rounded-xl p-3 text-center">
+          <p class="text-xs text-slate-400 uppercase tracking-wide mb-0.5">vs S&P 500</p>
+          <p class="text-xl font-bold text-slate-500" id="portfolioSpy">—</p>
+        </div>
+      </div>
+
+      <!-- Unrealized tab -->
+      <div class="mb-2">
+        <button onclick="togglePortfolioTab('open')" id="tab-open"
+                class="portfolio-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-blue-600 text-white mr-1">
+          Open
+        </button>
+        <button onclick="togglePortfolioTab('closed')" id="tab-closed"
+                class="portfolio-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-slate-100 text-slate-500 hover:bg-slate-200">
+          Closed
+        </button>
+      </div>
+
+      <div id="portfolioList" class="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+        <div class="flex items-center gap-2 text-slate-400 text-xs py-2">
+          <svg class="animate-spin h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          Loading portfolio…
+        </div>
+      </div>
+
+      <p class="text-xs text-slate-300 mt-3">Equal-weight · prices when starred</p>
+    </div>
+
+  </div><!-- /right -->
+</div><!-- /grid -->
+
+
+{# ── JavaScript ── #}
+<script>
+// ── Constants ─────────────────────────────────────────────────────────────────
+const PERIOD_DESCRIPTIONS = {
+  '1D': 'Today', '1W': 'Last 7 Days', '1M': 'Last 30 Days',
+  '6M': 'Last 6 Months', '1Y': 'Last Year',
+};
+const OHLC_LABEL_SETS = {
+  '1D': ['Open', 'High',  'Low', 'Prev'],
+  '1W': ['Open', 'High',  'Low', 'Close'],
+  '1M': ['Open', 'High',  'Low', 'Close'],
+  '6M': ['Open', 'High',  'Low', 'Close'],
+  '1Y': ['Open', 'High',  'Low', 'Close'],
+};
+
+// Server-rendered OHLC for 1D (from Finnhub quote)
+// Server-rendered OHLC for 1D (from Finnhub quote)
+const initialOHLC = {
+  open:  {{ ((result.open  if result else 0) or 0) | tojson }},
+  high:  {{ ((result.high  if result else 0) or 0) | tojson }},
+  low:   {{ ((result.low   if result else 0) or 0) | tojson }},
+  prev:  {{ ((result.prev_close if result else 0) or 0) | tojson }},
+};
+
+// ── Market hours ──────────────────────────────────────────────────────────────
+function getMarketStatus() {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay(), mins = et.getHours() * 60 + et.getMinutes();
+  if (day === 0 || day === 6) return { open: false, label: 'Weekend',    color: 'text-slate-400' };
+  if (mins < 570)             return { open: false, label: 'Pre-market', color: 'text-amber-500' };
+  if (mins >= 960)            return { open: false, label: 'After hours',color: 'text-amber-500' };
+  return { open: true, label: 'Market open', color: 'text-emerald-600' };
+}
+
+function renderMarketStatus() {
+  const s = getMarketStatus();
+  const dot = document.getElementById('marketDot');
+  if (dot) {
+    dot.className = `inline-flex items-center gap-1 text-xs font-medium ${s.color}`;
+    dot.innerHTML = s.open
+      ? `<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span> ${s.label}`
+      : `<span class="inline-flex rounded-full h-2 w-2 bg-slate-300"></span> ${s.label}`;
+    dot.classList.remove('hidden');
+  }
+  const badge = document.getElementById('marketStatusBadge');
+  if (badge) {
+    badge.className = `text-xs mt-1 ${s.color}`;
+    badge.textContent = s.open ? '● NYSE open now' : `● ${s.label}`;
+  }
+  return s;
+}
+
+// ── Dollar value animation ────────────────────────────────────────────────────
+function animateDollar(el, target, duration = 650) {
+  if (!el || typeof target !== 'number' || isNaN(target)) return;
+  const start = performance.now();
+  (function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // cubic ease-out
+    el.textContent = '$' + (ease * target).toFixed(2);
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = '$' + target.toFixed(2);
+  })(start);
+}
+
+function animateOHLC(open, high, low, prev, period = '1D') {
+  animateDollar(document.getElementById('ohlc-open'), open);
+  animateDollar(document.getElementById('ohlc-high'), high);
+  animateDollar(document.getElementById('ohlc-low'),  low);
+  animateDollar(document.getElementById('ohlc-prev'), prev);
+
+  // Update labels
+  const labels = OHLC_LABEL_SETS[period] || OHLC_LABEL_SETS['1D'];
+  const ids = ['label-open', 'label-high', 'label-low', 'label-prev'];
+  ids.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = labels[i];
+  });
+}
+
+// ── KPI counter animation (integers / floats) ─────────────────────────────────
+function animateCounter(el, target, isFloat, duration = 700) {
+  const start = performance.now();
+  (function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    el.textContent = isFloat ? `+${(ease * target).toFixed(2)}%` : Math.round(ease * target);
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = isFloat ? `+${target.toFixed(2)}%` : target;
+  })(start);
+}
+
+// ── Sparklines ────────────────────────────────────────────────────────────────
+function buildSparkSVG(prices) {
+  const W=64, H=24, P=2, min=Math.min(...prices), max=Math.max(...prices), range=max-min||1;
+  const pts = prices.map((p,i) =>
+    `${(P+(i/(prices.length-1))*(W-P*2)).toFixed(1)},${((H-P)-((p-min)/range)*(H-P*2)).toFixed(1)}`
+  ).join(' ');
+  const color = prices.at(-1) >= prices[0] ? '#10b981' : '#ef4444';
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+
+async function loadSparklines() {
+  await Promise.all(Array.from(document.querySelectorAll('[data-sparkline]')).map(async cell => {
+    try {
+      const r = await fetch(`/api/stock/history/${cell.dataset.sparkline}?period=1W`);
+      const d = await r.json();
+      if (d.prices?.length > 2) cell.innerHTML = buildSparkSVG(d.prices);
+    } catch(e) {}
+  }));
+}
+
+// ── Autocomplete ──────────────────────────────────────────────────────────────
+const symbolInput = document.getElementById('symbolInput');
+const suggestions = document.getElementById('searchSuggestions');
+let acTimer;
+if (symbolInput) {
+  symbolInput.addEventListener('input', () => {
+    clearTimeout(acTimer);
+    const q = symbolInput.value.trim();
+    if (q.length < 1) { suggestions.classList.add('hidden'); return; }
+    acTimer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/stock/search?q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (!data.results?.length) { suggestions.classList.add('hidden'); return; }
+        suggestions.innerHTML = data.results.map(r =>
+          `<button type="button" onclick="pickSymbol('${r.symbol}')"
+            class="w-full text-left px-4 py-2.5 hover:bg-blue-50 flex items-center justify-between border-b border-slate-100 last:border-0 transition">
+            <span class="font-mono font-bold text-slate-800 text-sm">${r.symbol}</span>
+            <span class="text-xs text-slate-400 truncate ml-3 max-w-[160px]">${r.name}</span>
+          </button>`
+        ).join('');
+        suggestions.classList.remove('hidden');
+      } catch(e) { suggestions.classList.add('hidden'); }
+    }, 280);
+  });
+  document.addEventListener('click', e => {
+    if (!symbolInput.contains(e.target) && !suggestions.contains(e.target))
+      suggestions.classList.add('hidden');
+  });
+}
+function pickSymbol(sym) {
+  symbolInput.value = sym;
+  suggestions.classList.add('hidden');
+  document.getElementById('lookupForm').submit();
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement?.tagName;
+  const isTyping = ['INPUT','TEXTAREA','SELECT'].includes(tag);
+  if (e.key === '/' && !isTyping) { e.preventDefault(); symbolInput?.focus(); symbolInput?.select(); }
+  if (e.key === 'Escape') {
+    suggestions?.classList.add('hidden');
+    if (document.activeElement === symbolInput) { symbolInput.value=''; symbolInput.blur(); }
+  }
+});
+
+// ── Chart state ───────────────────────────────────────────────────────────────
+let stockChart = null;
+let currentPeriod = '1D';
+let chartMode = 'single';
+
+const watchlistSymbols = {{ (favorites | map(attribute='symbol') | list | tojson) if favorites else '[]' }};
+const watchlistChanges  = {{ (favorites | map(attribute='percent_change') | list | tojson) if favorites else '[]' }};
+const currentSymbol     = {{ (result.symbol | tojson) if result else 'null' }};
+const CHART_COLORS = ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#f97316','#84cc16'];
+
+const SPINNER = `<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>`;
+
+function showChartLoading() {
+  const s = document.getElementById('chartStatus');
+  if (s) { s.style.display='flex'; s.innerHTML=`<div class="flex items-center gap-2 text-slate-400 text-sm">${SPINNER} Loading…</div>`; }
+}
+function hideChartStatus() {
+  const s = document.getElementById('chartStatus'); if (s) s.style.display='none';
+}
+function showChartError(msg) {
+  const s = document.getElementById('chartStatus');
+  if (s) { s.style.display='flex'; s.innerHTML=`<p class="text-slate-400 text-xs text-center px-4">${msg}</p>`; }
+}
+
+function updatePeriodButtons(period) {
+  document.querySelectorAll('.chart-btn').forEach(b => {
+    b.classList.remove('bg-blue-600','text-white');
+    b.classList.add('bg-slate-100','text-slate-500','hover:bg-slate-200');
+  });
+  const btn = document.getElementById(`chart-btn-${period}`);
+  if (btn) { btn.classList.remove('bg-slate-100','text-slate-500','hover:bg-slate-200'); btn.classList.add('bg-blue-600','text-white'); }
+
+  // Update the plain-language period label in the chart header
+  const lbl = document.getElementById('chartPeriodLabel');
+  if (lbl) lbl.textContent = PERIOD_DESCRIPTIONS[period] || period;
+
+  // Update period description in the quote card timeframe row
+  const desc = document.getElementById('periodDescription');
+  if (desc) desc.textContent = PERIOD_DESCRIPTIONS[period] || period;
+}
+
+function renderChart(labels, datasets, showLegend) {
+  const canvas = document.getElementById('stockChart');
+  if (!canvas) return;
+  if (stockChart) stockChart.destroy();
+  stockChart = new Chart(canvas.getContext('2d'), {
+    type:'line', data:{labels, datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{display:showLegend, position:'top', labels:{color:'#64748b',font:{size:11},boxWidth:12,usePointStyle:true}},
+        tooltip:{backgroundColor:'rgba(15,23,42,0.9)', padding:10,
+          callbacks:{label:ctx=>` ${ctx.dataset.label?ctx.dataset.label+': ':''}$${ctx.parsed.y.toFixed(2)}`}}
+      },
+      scales:{
+        x:{grid:{display:false}, ticks:{maxTicksLimit:7,font:{size:10},color:'#94a3b8'}},
+        y:{position:'right', grid:{color:'rgba(241,245,249,0.8)'},
+           ticks:{callback:v=>`$${v.toFixed(0)}`,font:{size:10},color:'#94a3b8'}}
+      }
+    }
+  });
+}
+
+// ── OHLC update from history data ─────────────────────────────────────────────
+async function loadOHLCForPeriod(symbol, period) {
+  if (period === '1D') {
+    // Use the server-rendered Finnhub values (most accurate for today)
+    animateOHLC(initialOHLC.open, initialOHLC.high, initialOHLC.low, initialOHLC.prev, '1D');
+    return;
+  }
+  try {
+    const r = await fetch(`/api/stock/history/${symbol}?period=${period}`);
+    const d = await r.json();
+    if (!d.prices?.length) return;
+    const p = d.prices;
+    animateOHLC(p[0], Math.max(...p), Math.min(...p), p.at(-1), period);
+  } catch(e) { /* keep existing values */ }
+}
+
+// ── Period click — drives BOTH chart AND OHLC ─────────────────────────────────
+function onPeriodClick(period) {
+  currentPeriod = period;
+  updatePeriodButtons(period);
+
+  // Market-closed notice for 1D
+  const notice = document.getElementById('marketClosedNotice');
+  if (period === '1D' && notice) {
+    const s = getMarketStatus();
+    if (!s.open) {
+      document.getElementById('marketClosedText').textContent =
+        s.label === 'Weekend'
+          ? "Market is closed (weekend). 1D data reflects Friday's last session."
+          : `Market is currently ${s.label.toLowerCase()}.`;
+      notice.classList.remove('hidden');
+    } else { notice.classList.add('hidden'); }
+  } else if (notice) { notice.classList.add('hidden'); }
+
+  if (chartMode === 'watchlist') {
+    loadWatchlistChart(getTop5Symbols(), period);
+  } else if (currentSymbol) {
+    loadChart(currentSymbol, period);
+    loadOHLCForPeriod(currentSymbol, period);
+  }
+}
+
+function switchToWatchlist() {
+  // Clear the search bar and navigate to the clean dashboard —
+  // removes the result, clears analysis/news, shows watchlist chart.
+  const inp = document.getElementById('symbolInput');
+  if (inp) inp.value = '';
+  window.location.href = '/dashboard';
+}
+
+// Sort watchlist by absolute % change, take top 5
+function getTop5Symbols() {
+  return watchlistSymbols
+    .map((sym, i) => ({ sym, pct: Math.abs(watchlistChanges[i] || 0) }))
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 5)
+    .map(x => x.sym);
+}
+
+async function loadChart(symbol, period = '1D') {
+  chartMode = 'single';
+  showChartLoading();
+  const wBtn = document.getElementById('watchlistBtn');
+  if (wBtn && watchlistSymbols.length > 0) wBtn.style.display = 'inline';
+  try {
+    const res = await fetch(`/api/stock/history/${symbol}?period=${period}`);
+    if (!res.ok) {
+      showChartError(period==='1D' ? 'No intraday data — market may be closed. Try 1W.' : 'Historical data unavailable.');
+      return;
+    }
+    const data = await res.json();
+    if (!data.prices?.length) { showChartError('No data for this period.'); return; }
+    hideChartStatus();
+    const isUp = data.prices.at(-1) >= data.prices[0];
+    renderChart(data.labels, [{
+      data:data.prices,
+      borderColor:isUp?'#10b981':'#ef4444',
+      backgroundColor:isUp?'rgba(16,185,129,0.08)':'rgba(239,68,68,0.08)',
+      fill:true, tension:0.35, pointRadius:0, pointHoverRadius:4, borderWidth:2,
+    }], false);
+  } catch(e) { showChartError('Chart unavailable.'); }
+}
+
+async function loadWatchlistChart(symbols, period = '1M') {
+  chartMode = 'watchlist';
+  showChartLoading();
+  try {
+    const results = await Promise.all(symbols.map(sym =>
+      fetch(`/api/stock/history/${sym}?period=${period}`).then(r=>r.json())
+    ));
+    const valid = results.map((d,i)=>({data:d,sym:symbols[i]})).filter(p=>!p.data.error&&p.data.prices?.length);
+    if (!valid.length) { showChartError('No chart data for your watchlist.'); return; }
+    hideChartStatus();
+    // Subtitle showing how many total vs shown
+    const title = document.getElementById('chartTitle');
+    if (title) {
+      const total = watchlistSymbols.length;
+      title.textContent = total > 5
+        ? `Watchlist Overview · Top 5 of ${total}`
+        : 'Watchlist Overview';
+    }
+    renderChart(valid[0].data.labels, valid.map((p,i)=>({
+      label:p.sym, data:p.data.prices,
+      borderColor:CHART_COLORS[i%CHART_COLORS.length],
+      backgroundColor:'transparent',
+      fill:false, tension:0.35, pointRadius:0, pointHoverRadius:4, borderWidth:2,
+    })), true);
+  } catch(e) { showChartError('Chart unavailable.'); }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  renderMarketStatus();
+  loadSparklines();
+
+  // KPI card counter animations
+  document.querySelectorAll('[data-kpi-int]').forEach(el => {
+    const v = parseInt(el.dataset.kpiInt, 10);
+    if (v > 0) animateCounter(el, v, false);
+  });
+  document.querySelectorAll('[data-kpi-float]').forEach(el => {
+    const v = parseFloat(el.dataset.kpiFloat);
+    if (v > 0) animateCounter(el, v, true);
+  });
+
+  // Position the tab indicator on the default (chart) tab
+  _moveTabIndicator('chart');
+
+  if (currentSymbol) {
+    // Animate the initial 1D OHLC values on page load
+    animateOHLC(initialOHLC.open, initialOHLC.high, initialOHLC.low, initialOHLC.prev, '1D');
+    updatePeriodButtons('1D');
+    loadChart(currentSymbol, '1D');
+  } else if (watchlistSymbols.length > 0) {
+    updatePeriodButtons('1M');
+    loadWatchlistChart(getTop5Symbols(), '1M');
+  }
+});
+
+// ── Paper Portfolio widget ────────────────────────────────────────────────────
+let _portfolioData = null;
+let _activeTab = 'open';
+
+function fmtPct(v) {
+  if (v == null) return '—';
+  const sign = v >= 0 ? '+' : '';
+  return `${sign}${v.toFixed(2)}%`;
+}
+
+function renderPortfolioList(data, tab) {
+  const list = document.getElementById('portfolioList');
+  if (!list) return;
+  const rows = tab === 'open' ? data.unrealized : data.realized;
+
+  if (!rows.length) {
+    list.innerHTML = `<p class="text-xs text-slate-400 py-2">
+      ${tab === 'open' ? 'No open positions — star a stock to start tracking.' : 'No closed positions yet.'}
+    </p>`;
+    return;
+  }
+
+  list.innerHTML = rows.map(p => {
+    const ret = p.return_pct ?? 0;
+    const up = ret >= 0;
+    const color = up ? 'text-emerald-600' : 'text-red-500';
+    const bg = up ? 'bg-emerald-50/80' : 'bg-red-50/80';
+    const priceInfo = tab === 'open'
+      ? `<span class="text-slate-400">$${(p.buy_price||0).toFixed(2)} → $${(p.current_price||0).toFixed(2)}</span>`
+      : `<span class="text-slate-400">$${(p.buy_price||0).toFixed(2)} → $${(p.sell_price||0).toFixed(2)}</span>`;
+    return `<div class="flex items-center justify-between ${bg} rounded-xl px-3 py-1.5">
+      <div>
+        <span class="font-mono font-bold text-slate-800 text-sm">${p.symbol}</span>
+        <span class="text-xs ml-1.5">${priceInfo}</span>
+      </div>
+      <span class="font-bold text-sm ${color}">${fmtPct(p.return_pct)}</span>
+    </div>`;
+  }).join('');
+}
+
+function togglePortfolioTab(tab) {
+  _activeTab = tab;
+  ['open','closed'].forEach(t => {
+    const btn = document.getElementById(`tab-${t}`);
+    if (!btn) return;
+    if (t === tab) {
+      btn.className = 'portfolio-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-blue-600 text-white mr-1';
+    } else {
+      btn.className = 'portfolio-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-slate-100 text-slate-500 hover:bg-slate-200 mr-1';
+    }
+  });
+  if (_portfolioData) renderPortfolioList(_portfolioData, tab);
+}
+
+async function loadPortfolio() {
+  try {
+    const res = await fetch('/api/portfolio');
+    if (!res.ok) { document.getElementById('portfolioWidget')?.classList.add('hidden'); return; }
+    const data = await res.json();
+    _portfolioData = data;
+
+    // Headline: my picks avg return
+    const avgEl = document.getElementById('portfolioAvgReturn');
+    if (avgEl && data.avg_return != null) {
+      const up = data.avg_return >= 0;
+      avgEl.textContent = fmtPct(data.avg_return);
+      avgEl.className = `text-xl font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`;
+    } else if (avgEl) {
+      avgEl.textContent = '—';
+    }
+
+    // SPY benchmark
+    const spyEl = document.getElementById('portfolioSpy');
+    if (spyEl && data.spy_return != null) {
+      spyEl.textContent = fmtPct(data.spy_return);
+      spyEl.className = `text-xl font-bold ${data.spy_return >= 0 ? 'text-slate-600' : 'text-red-400'}`;
+    }
+
+    // Beat/lagging badge
+    const badge = document.getElementById('portfolioBeatBadge');
+    if (badge && data.avg_return != null && data.spy_return != null) {
+      const diff = data.avg_return - data.spy_return;
+      badge.classList.remove('hidden');
+      if (diff > 0) {
+        badge.textContent = `+${diff.toFixed(1)}% vs SPY 🏆`;
+        badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700';
+      } else {
+        badge.textContent = `${diff.toFixed(1)}% vs SPY`;
+        badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-500';
+      }
+    }
+
+    renderPortfolioList(data, _activeTab);
+  } catch(e) {
+    document.getElementById('portfolioWidget')?.classList.add('hidden');
+  }
+}
+
+// Configure marked once (breaks: true → single \n becomes <br>)
+if (typeof marked !== 'undefined') {
+  marked.use({ breaks: true, gfm: true });
+}
+function _md(text) {
+  return (typeof marked !== 'undefined' && text) ? marked.parse(text) : (text ? `<p>${text}</p>` : '');
+}
+
+// ── Reddit widget ─────────────────────────────────────────────────────────────
+async function loadReddit(timeframe) {
+  const content = document.getElementById('reddit-content');
+  content.innerHTML = `<div class="flex items-center gap-2 text-slate-400">${SPINNER} Loading…</div>`;
+  document.querySelectorAll('.reddit-tab').forEach(b => {
+    b.className = 'reddit-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-slate-100 text-slate-500 hover:bg-slate-200';
+  });
+  const active = document.getElementById('btn-'+timeframe);
+  if (active) active.className = 'reddit-tab text-xs px-2.5 py-1 rounded-full font-medium transition bg-blue-600 text-white';
+  try {
+    const res = await fetch(`/api/reddit/summary?timeframe=${timeframe}`);
+    const data = await res.json();
+    let html = data.summary ? _md(data.summary) : '';
+    if (data.tickers?.length) {
+      const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+      const chips = data.tickers.slice(0,8).map(m => {
+        const up = (m.mentions||0) >= (m.mentions_24h_ago||0);
+        return `<form method="POST" action="/stock/lookup" class="inline">
+          <input type="hidden" name="csrf_token" value="${csrfToken}"/>
+          <input type="hidden" name="symbol" value="${m.ticker}"/>
+          <button type="submit" title="${m.name||''}" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-mono font-bold border transition
+            ${up?'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100':'bg-red-50 text-red-600 border-red-100 hover:bg-red-100'}">
+            ${m.ticker}<span class="opacity-60">${up?'▲':'▼'}</span>
+          </button></form>`;
+      }).join(' ');
+      html += `<div class="flex flex-wrap gap-1.5">${chips}</div>`;
+    }
+    content.innerHTML = html || '<p class="text-slate-400">No data available.</p>';
+  } catch(e) {
+    content.innerHTML = '<p class="text-slate-400">Couldn\'t reach the server.</p>';
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  loadReddit('day');
+  loadPortfolio();
+  if (currentSymbol) loadAiInsights(currentSymbol);
+});
+
+// ── Quote card tab switching — crossfade + sliding indicator ─────────────────
+function _moveTabIndicator(name) {
+  const btn       = document.getElementById('tab-' + name);
+  const indicator = document.getElementById('tabIndicator');
+  const bar       = document.getElementById('tabBar');
+  if (!btn || !indicator || !bar) return;
+  // Offset relative to the tabBar container (accounts for padding)
+  const barRect = bar.getBoundingClientRect();
+  const btnRect = btn.getBoundingClientRect();
+  indicator.style.left  = (btnRect.left - barRect.left) + 'px';
+  indicator.style.width = btnRect.width + 'px';
+}
+
+function switchQuoteTab(name) {
+  const tabs = ['chart', 'analysis', 'news'];
+
+  // Update tab text colours
+  tabs.forEach(t => {
+    const tabBtn = document.getElementById('tab-' + t);
+    if (!tabBtn) return;
+    if (t === name) {
+      tabBtn.classList.add('text-blue-600');
+      tabBtn.classList.remove('text-slate-400');
+    } else {
+      tabBtn.classList.remove('text-blue-600');
+      tabBtn.classList.add('text-slate-400');
+    }
+  });
+
+  // Slide the indicator to the active tab
+  _moveTabIndicator(name);
+
+  // Crossfade panels
+  const current = tabs.find(t => !document.getElementById('panel-' + t)?.classList.contains('hidden'));
+  if (current === name) return;
+
+  const curPanel = document.getElementById('panel-' + current);
+  const newPanel = document.getElementById('panel-' + name);
+  if (!newPanel) return;
+
+  if (curPanel) {
+    curPanel.style.transition = 'opacity 0.18s ease';
+    curPanel.style.opacity    = '0';
+    setTimeout(() => {
+      curPanel.classList.add('hidden');
+      curPanel.style.opacity    = '';
+      curPanel.style.transition = '';
+      newPanel.style.opacity    = '0';
+      newPanel.style.transition = '';
+      newPanel.classList.remove('hidden');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        newPanel.style.transition = 'opacity 0.22s ease';
+        newPanel.style.opacity    = '1';
+        // Clean up inline styles after transition
+        newPanel.addEventListener('transitionend', () => {
+          newPanel.style.opacity = '';
+          newPanel.style.transition = '';
+        }, { once: true });
+      }));
+    }, 180);
+  } else {
+    newPanel.classList.remove('hidden');
+  }
+}
+
+// ── AI Insights (populates Analysis + News tabs from one fetch) ───────────────
+async function loadAiInsights(symbol) {
+  const skeleton    = document.getElementById('aiSkeleton');
+  const content     = document.getElementById('aiContent');
+  const errEl       = document.getElementById('aiError');
+  const newsSkeleton= document.getElementById('newsTabSkeleton');
+  const newsList    = document.getElementById('newsTabList');
+  const newsEmpty   = document.getElementById('newsTabEmpty');
+
+  try {
+    const resp = await fetch(`/api/stock/analysis/${symbol}`);
+    if (!resp.ok) throw new Error('fetch failed');
+    const d = await resp.json();
+
+    // ── Timestamp (visible in tab bar) ──
+    if (d.generated_at) {
+      const ts = new Date(d.generated_at);
+      document.getElementById('aiGeneratedAt').textContent =
+        'as of ' + ts.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
+
+    // ── Analysis tab: summary ──
+    document.getElementById('aiSummary').innerHTML = _md(d.summary || '');
+
+    // ── Analyst targets ──
+    if (d.targets && d.targets.mean) {
+      const t = d.targets;
+      const recEl = document.getElementById('aiRecommendation');
+      recEl.textContent = t.recommendation || 'N/A';
+      const recColors = {
+        'Strong Buy': 'bg-emerald-100 text-emerald-700',
+        'Buy':        'bg-green-100 text-green-700',
+        'Hold':       'bg-yellow-100 text-yellow-700',
+        'Sell':       'bg-red-100 text-red-600',
+        'Strong Sell':'bg-red-200 text-red-700',
+      };
+      recEl.className = 'text-xs font-bold px-2.5 py-1 rounded-full ' +
+        (recColors[t.recommendation] || 'bg-slate-100 text-slate-600');
+
+      document.getElementById('aiMeanTarget').textContent = '$' + t.mean.toFixed(2);
+      document.getElementById('aiTargetRange').textContent = `$${t.low}–$${t.high}`;
+      document.getElementById('aiAnalystCount').textContent =
+        t.analysts ? `(${t.analysts} analysts)` : '';
+      document.getElementById('aiLowLabel').textContent  = '$' + t.low;
+      document.getElementById('aiHighLabel').textContent = '$' + t.high;
+
+      const currentPrice = {{ (result.current or 0) | tojson }};
+      const pct = Math.min(100, Math.max(0,
+        ((currentPrice - t.low) / (t.high - t.low)) * 100
+      ));
+      const meanPct = Math.min(100, Math.max(0,
+        ((t.mean - t.low) / (t.high - t.low)) * 100
+      ));
+      document.getElementById('aiTargetBar').style.width    = meanPct + '%';
+      document.getElementById('aiCurrentMarker').style.left = pct + '%';
+
+      if (t.next_earnings) {
+        document.getElementById('aiEarningsDate').textContent = t.next_earnings;
+        document.getElementById('aiEarnings').classList.remove('hidden');
+      }
+      document.getElementById('aiTargets').classList.remove('hidden');
+    }
+
+    // ── Reddit sentiment ──
+    if (d.reddit) {
+      const trendIcon = d.reddit.trend === 'up' ? '↑' : d.reddit.trend === 'down' ? '↓' : '→';
+      document.getElementById('aiRedditMentions').textContent = d.reddit.mentions.toLocaleString();
+      document.getElementById('aiRedditTrend').textContent =
+        trendIcon + ' ' + (d.reddit.delta > 0 ? `${d.reddit.delta} vs yesterday` : 'flat');
+      document.getElementById('aiReddit').classList.remove('hidden');
+    }
+
+    skeleton.classList.add('hidden');
+    content.classList.remove('hidden');
+    content.style.animation = 'fadeIn 0.3s ease-out';
+
+    // ── News tab ──
+    if (newsSkeleton) newsSkeleton.classList.add('hidden');
+    if (d.news && d.news.length) {
+      if (newsList) {
+        newsList.innerHTML = d.news.map(n => `
+          <li class="py-2 flex items-start gap-2">
+            <span class="text-xs text-slate-400 font-mono whitespace-nowrap mt-0.5">${n.date}</span>
+            <a href="${n.url}" target="_blank" rel="noopener"
+               class="text-xs text-slate-700 hover:text-blue-600 transition leading-snug">
+              ${n.headline}
+            </a>
+          </li>`).join('');
+        newsList.classList.remove('hidden');
+      }
+    } else {
+      if (newsEmpty) newsEmpty.classList.remove('hidden');
+    }
+
+  } catch (e) {
+    if (skeleton) skeleton.classList.add('hidden');
+    if (errEl) errEl.classList.remove('hidden');
+    if (newsSkeleton) newsSkeleton.classList.add('hidden');
+    if (newsEmpty) newsEmpty.classList.remove('hidden');
+  }
+}
+</script>
+
+
+{# ═══════════════════════════════════════════════════════════════
+   PUBLIC / LOGGED-OUT HERO
+════════════════════════════════════════════════════════════════ #}
+{% else %}
+
+<div class="relative overflow-hidden rounded-3xl mb-8 fade-in"
+     style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #1e3a5f 100%); min-height: 300px;">
+  <div class="absolute inset-0 opacity-5"
+       style="background-image: linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px); background-size: 40px 40px;"></div>
+  <div class="relative z-10 px-8 py-14 sm:px-16">
+    <div class="max-w-xl">
+      <p class="text-blue-400 text-xs font-semibold tracking-widest uppercase mb-3">AI-Assisted Market Watch</p>
+      <h1 class="text-4xl sm:text-5xl font-bold text-white leading-tight">Make Smarter<br/>Investment Decisions</h1>
+      <p class="text-slate-400 mt-4 text-base leading-relaxed">
+        Real-time stock data, Reddit sentiment analysis powered by Claude AI, and a personalized watchlist — all in one place.
+      </p>
+      <div class="flex flex-wrap gap-3 mt-8">
+        <a href="/signup" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-8 py-3 rounded-xl transition shadow-lg shadow-blue-900/30">Get Started Free</a>
+        <a href="/login" class="bg-white/10 hover:bg-white/20 text-white border border-white/20 font-semibold px-8 py-3 rounded-xl transition backdrop-blur-sm">Log In</a>
+      </div>
+    </div>
+    <div class="absolute right-8 top-1/2 -translate-y-1/2 hidden lg:flex flex-col gap-3">
+      <div class="glass-dark border border-white/10 rounded-2xl p-4 text-sm shadow-xl" style="min-width:140px;">
+        <p class="text-slate-400 text-xs uppercase tracking-wide">Trending</p>
+        <p class="text-white font-bold text-xl font-mono mt-1">{{ trending or '—' }}</p>
+        <p class="text-blue-400 text-xs mt-0.5">Reddit top pick</p>
+      </div>
+      <div class="glass-dark border border-white/10 rounded-2xl p-4 text-sm shadow-xl">
+        <p class="text-slate-400 text-xs uppercase tracking-wide">Market</p>
+        <p class="font-bold text-base mt-1
+          {% if 'Bullish' in (market_mood or '') %}text-emerald-400
+          {% elif 'Bearish' in (market_mood or '') %}text-red-400
+          {% else %}text-slate-300{% endif %}">{{ market_mood or 'Mixed' }}</p>
+        <p class="text-slate-400 text-xs mt-0.5">today's signal</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+  <div class="glass border border-white/60 rounded-2xl p-5 shadow-sm">
+    <div class="mb-3"><i data-lucide="bar-chart-2" class="w-6 h-6 text-blue-600"></i></div>
+    <h3 class="font-semibold text-slate-800 text-sm">Real-time Quotes</h3>
+    <p class="text-slate-500 text-xs mt-1 leading-relaxed">Live price data, OHLC breakdown, and related stocks for any ticker.</p>
+  </div>
+  <div class="glass border border-white/60 rounded-2xl p-5 shadow-sm">
+    <div class="mb-3"><i data-lucide="bot" class="w-6 h-6 text-blue-600"></i></div>
+    <h3 class="font-semibold text-slate-800 text-sm">AI Sentiment</h3>
+    <p class="text-slate-500 text-xs mt-1 leading-relaxed">Claude AI summarizes what Reddit's retail investors are talking about.</p>
+  </div>
+  <div class="glass border border-white/60 rounded-2xl p-5 shadow-sm">
+    <div class="mb-3"><i data-lucide="star" class="w-6 h-6 text-blue-600"></i></div>
+    <h3 class="font-semibold text-slate-800 text-sm">Personal Watchlist</h3>
+    <p class="text-slate-500 text-xs mt-1 leading-relaxed">Save favorites and track them with live prices from your dashboard.</p>
+  </div>
+</div>
+
+{% if top_movers %}
+<div>
+  <h2 class="text-base font-semibold text-slate-700 mb-3 flex items-center gap-2">
+    <i data-lucide="trending-up" class="w-4 h-4 text-blue-600"></i> Market Snapshot
+  </h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% if top_movers.gainers %}
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5">
+      <h3 class="text-xs font-semibold text-emerald-600 uppercase tracking-widest mb-3">🟢 Top Gainers</h3>
+      <div class="space-y-2">
+        {% for s in top_movers.gainers %}
+        <div class="flex justify-between items-center text-sm">
+          <span class="font-mono font-bold text-slate-800">{{ s.symbol }}</span>
+          <span class="text-slate-500">${{ "%.2f"|format(s.current) }}</span>
+          <span class="font-semibold text-emerald-600 min-w-[72px] text-right">+{{ "%.2f"|format(s.percent_change) }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if top_movers.losers %}
+    <div class="glass border border-white/60 rounded-2xl shadow-sm p-5">
+      <h3 class="text-xs font-semibold text-red-500 uppercase tracking-widest mb-3">🔴 Top Losers</h3>
+      <div class="space-y-2">
+        {% for s in top_movers.losers %}
+        <div class="flex justify-between items-center text-sm">
+          <span class="font-mono font-bold text-slate-800">{{ s.symbol }}</span>
+          <span class="text-slate-500">${{ "%.2f"|format(s.current) }}</span>
+          <span class="font-semibold text-red-500 min-w-[72px] text-right">{{ "%.2f"|format(s.percent_change) }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <p class="text-xs text-slate-400 mt-3 text-center">
+    Curated watchlist · refreshed every 5 min ·
+    <a href="/signup" class="text-blue-500 hover:underline">Sign up free</a> to search any ticker
+  </p>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Welcome — StockApp{% endblock %}
+{% block content %}
+<div class="min-h-[85vh] flex items-center justify-center">
+  <div class="w-full max-w-md fade-in">
+
+    <!-- Success header -->
+    <div class="text-center mb-6">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 mb-4">
+        <span class="text-3xl">🎉</span>
+      </div>
+      <h1 class="text-2xl font-bold text-slate-900">You're in!</h1>
+      <p class="text-slate-500 text-sm mt-1">Account created for <span class="font-medium text-slate-700">{{ user.email }}</span></p>
+    </div>
+
+    <!-- 2FA prompt card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+
+      <!-- Top accent bar -->
+      <div class="h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+
+      <div class="p-8">
+        <div class="flex items-start gap-4 mb-6">
+          <div class="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-xl">🔐</div>
+          <div>
+            <p class="font-semibold text-slate-800">Secure your account with 2FA</p>
+            <p class="text-sm text-slate-500 mt-1 leading-relaxed">
+              Two-factor authentication adds a one-time code from your phone as a second login step. Takes about 60 seconds to set up.
+            </p>
+          </div>
+        </div>
+
+        <!-- What you'll need -->
+        <div class="bg-slate-50 rounded-xl p-4 mb-6">
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2">You'll need</p>
+          <div class="flex items-center gap-2 text-sm text-slate-600">
+            <span class="text-base">📱</span>
+            <span>An authenticator app — Google Authenticator, Authy, or 1Password</span>
+          </div>
+        </div>
+
+        <!-- CTAs -->
+        <div class="space-y-3">
+          <!-- "Set up now" POSTs to the existing /settings/2fa/setup endpoint -->
+          <form method="POST" action="/settings/2fa/setup">
+            <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+            <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition shadow-sm flex items-center justify-center gap-2">
+              <span>Set Up Two-Factor Auth</span>
+              <span class="opacity-70">→</span>
+            </button>
+          </form>
+
+          <a href="/dashboard"
+             class="block w-full text-center text-sm text-slate-400 hover:text-slate-600 py-2 transition">
+            Skip for now — I'll set it up later in Security Settings
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

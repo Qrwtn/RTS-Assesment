@@ -1,0 +1,37 @@
+name: CodeQL
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    # Runs every Monday at 08:00 UTC — catches new CVEs between PRs
+    - cron: "0 8 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (Python)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # required to upload SARIF results
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          # Covers: SQL injection, path traversal, XSS, command injection,
+          # insecure deserialization, SSRF, and 50+ other CWE categories.
+          queries: security-and-quality
+
+      # CodeQL auto-builds Python — no explicit build step needed.
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"

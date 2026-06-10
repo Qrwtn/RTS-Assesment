@@ -1,0 +1,35 @@
+version: 2
+
+updates:
+  # ── Python dependencies (requirements.txt) ───────────────────────────────────
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/New_York"
+    # Group all non-breaking updates into a single PR to reduce noise
+    groups:
+      non-breaking:
+        update-types:
+          - "minor"
+          - "patch"
+    # Security updates are always opened as individual PRs regardless of groups
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+
+  # ── GitHub Actions ────────────────────────────────────────────────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
