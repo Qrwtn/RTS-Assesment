@@ -213,18 +213,26 @@ async def search_symbols(query: str) -> list[dict]:
     if cached:
         return cached
 
-    async with httpx.AsyncClient() as client:
+    # Yahoo Finance search returns US-listed ADRs (HMC, TM, etc.) that Finnhub
+    # search misses — Finnhub only surfaces primary-exchange listings (Tokyo, etc.).
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; StockApp/1.0)",
+        "Accept": "application/json",
+    }
+    async with httpx.AsyncClient(headers=headers) as client:
         try:
             resp = await client.get(
-                f"{FINNHUB_BASE}/search",
-                params={"q": query, "token": settings.FINNHUB_API_KEY},
+                "https://query1.finance.yahoo.com/v1/finance/search",
+                params={"q": query, "quotesCount": 10, "newsCount": 0, "enableFuzzyQuery": "false"},
                 timeout=5.0,
             )
+            resp.raise_for_status()
+            quotes = resp.json().get("quotes", [])
             results = [
-                {"symbol": r["symbol"], "name": r["description"]}
-                for r in resp.json().get("result", [])[:7]
-                if r.get("type") == "Common Stock" and "." not in r.get("symbol", "")
-            ]
+                {"symbol": r["symbol"], "name": r.get("shortname") or r.get("longname") or r["symbol"]}
+                for r in quotes
+                if r.get("quoteType") == "EQUITY" and "." not in r.get("symbol", "")
+            ][:7]
             await cache_set(cache_key, results, ttl=3600)
             return results
         except Exception as e:

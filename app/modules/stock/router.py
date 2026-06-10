@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Form, Path, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -8,7 +9,7 @@ from app.middleware.csrf import csrf_protect
 from app.middleware.auth_guard import get_current_user
 from app.modules.stock import service as stock_svc
 from app.modules.user import repository as user_repo
-from app.modules.user.models import User
+from app.modules.user.models import User, UserFavorite
 from app.templates import templates
 
 router = APIRouter()
@@ -124,6 +125,34 @@ async def stock_lookup(
 _SYMBOL_PATH = Path(..., pattern=r"^[A-Z]{1,10}$", description="Stock ticker symbol")
 
 
+async def _favorites_fragment(request: Request, db: AsyncSession, user_id: int, hx_target: str, symbol: str, is_favorited: bool):
+    """Return the appropriate HTML fragment based on the HTMX target element."""
+    fav_rows = (await db.execute(
+        select(UserFavorite).where(UserFavorite.user_id == user_id)
+    )).scalars().all()
+    fav_symbols = [f.symbol for f in fav_rows]
+    favorites = await stock_svc.get_favorites_with_prices(fav_symbols)
+
+    # Quote card star → return new star button + OOB watchlist update
+    if hx_target == "star-form":
+        return templates.TemplateResponse(
+            request,
+            "stock/partials/_star_and_watchlist.html",
+            {"symbol": symbol, "is_favorited": is_favorited, "favorites": favorites},
+        )
+
+    # Watchlist x-button → return watchlist fragment
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(
+            request,
+            "stock/partials/_watchlist_inner.html",
+            {"favorites": favorites},
+        )
+
+    # Non-HTMX fallback (JS disabled etc.)
+    return RedirectResponse("/dashboard", status_code=303)
+
+
 @router.post("/stock/favorite/{symbol}")
 async def add_favorite(
     symbol: str = _SYMBOL_PATH,
@@ -136,7 +165,8 @@ async def add_favorite(
     quote = await stock_svc.get_quote(symbol)
     price = quote["current"] if quote else None
     await user_repo.add_favorite(db, current_user.id, symbol, price_at_add=price)
-    return RedirectResponse("/dashboard", status_code=303)
+    hx_target = request.headers.get("HX-Target", "")
+    return await _favorites_fragment(request, db, current_user.id, hx_target, symbol, is_favorited=True)
 
 
 @router.post("/stock/unfavorite/{symbol}")
@@ -151,7 +181,8 @@ async def remove_favorite(
     quote = await stock_svc.get_quote(symbol)
     current_price = quote["current"] if quote else None
     await user_repo.remove_favorite(db, current_user.id, symbol, current_price=current_price)
-    return RedirectResponse("/dashboard", status_code=303)
+    hx_target = request.headers.get("HX-Target", "")
+    return await _favorites_fragment(request, db, current_user.id, hx_target, symbol, is_favorited=False)
 
 
 # ── JSON API endpoints ────────────────────────────────────────────────────────

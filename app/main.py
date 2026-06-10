@@ -1,3 +1,4 @@
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -23,6 +24,10 @@ from app.modules.stock.router import router as stock_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Generate a fresh nonce every time the process starts.
+    # Sessions that pre-date this boot carry a different nonce and are rejected,
+    # forcing re-login — this prevents stale sessions from surviving restarts/deploys.
+    app.state.boot_nonce = secrets.token_hex(16)
     yield
 
 

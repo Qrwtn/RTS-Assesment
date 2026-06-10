@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
   <script src="https://unpkg.com/lucide@0.447.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -190,6 +191,79 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
     });
     setInterval(loadTicker, 60000);
+
+    // Re-render Lucide icons and sparklines after any HTMX swap
+    function _syncWatchlistCount(container) {
+      const countEl = document.getElementById('watchlist-count');
+      if (!countEl || !container) return;
+
+      const items    = container.querySelectorAll('[data-sparkline]');
+      const newCount = items.length;
+      const oldCount = parseInt(countEl.textContent) || 0;
+
+      // Slot-machine scroll: old number exits in direction of change,
+      // new number enters from the opposite side.
+      if (oldCount !== newCount) {
+        const goingUp   = newCount > oldCount;
+        const exitTo    = goingUp ? '-100%' : '100%';
+        const enterFrom = goingUp ? '100%'  : '-100%';
+
+        countEl.style.transition = 'transform 0.2s ease-in, opacity 0.2s ease-in';
+        countEl.style.transform  = `translateY(${exitTo})`;
+        countEl.style.opacity    = '0';
+
+        setTimeout(() => {
+          countEl.textContent      = newCount;
+          countEl.style.transition = 'none';
+          countEl.style.transform  = `translateY(${enterFrom})`;
+          countEl.style.opacity    = '0';
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            countEl.style.transition = 'transform 0.2s ease-out, opacity 0.2s ease-out';
+            countEl.style.transform  = 'translateY(0)';
+            countEl.style.opacity    = '1';
+          }));
+        }, 200);
+      }
+
+      // Keep watchlistSymbols in sync so the comparison chart reflects
+      // the current watchlist without a page reload.
+      if (typeof watchlistSymbols !== 'undefined') {
+        watchlistSymbols.length = 0;
+        items.forEach(el => watchlistSymbols.push(el.dataset.sparkline));
+
+        // Re-render the comparison chart if it's currently showing watchlist mode
+        if (typeof chartMode !== 'undefined' && chartMode === 'watchlist') {
+          if (watchlistSymbols.length > 0 && typeof loadWatchlistChart === 'function') {
+            const syms = typeof getTop5Symbols === 'function'
+              ? getTop5Symbols()
+              : watchlistSymbols.slice(0, 5);
+            loadWatchlistChart(syms);
+          } else if (typeof stockChart !== 'undefined' && stockChart) {
+            stockChart.destroy();
+            stockChart = null;
+            if (typeof showChartError === 'function')
+              showChartError('No stocks in your watchlist.');
+          }
+        }
+      }
+    }
+
+    function _afterWatchlistSwap(target) {
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      if (typeof loadSparklines === 'function') loadSparklines();
+      _syncWatchlistCount(target);
+    }
+
+    document.addEventListener('htmx:afterSwap', function(evt) {
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      if (evt.detail.target.id === 'watchlist-inner') _afterWatchlistSwap(evt.detail.target);
+    });
+
+    // OOB path: star button on quote card updates watchlist out-of-band
+    document.addEventListener('htmx:oobAfterSwap', function(evt) {
+      if (evt.detail.target && evt.detail.target.id === 'watchlist-inner')
+        _afterWatchlistSwap(evt.detail.target);
+    });
   </script>
 
 </body>
