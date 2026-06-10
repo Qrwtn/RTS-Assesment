@@ -1,0 +1,21 @@
+{% if is_favorited %}
+<form id="star-form"
+      hx-post="/stock/unfavorite/{{ symbol }}"
+      hx-target="#star-form"
+      hx-swap="outerHTML">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+  <button type="submit" class="text-amber-400 hover:text-amber-500 transition" title="Remove from watchlist">
+    <i data-lucide="star" class="w-5 h-5" style="fill:currentColor"></i>
+  </button>
+</form>
+{% else %}
+<form id="star-form"
+      hx-post="/stock/favorite/{{ symbol }}"
+      hx-target="#star-form"
+      hx-swap="outerHTML">
+  <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+  <button type="submit" class="text-slate-300 hover:text-amber-400 transition" title="Add to watchlist">
+    <i data-lucide="star" class="w-5 h-5"></i>
+  </button>
+</form>
+{% endif %}

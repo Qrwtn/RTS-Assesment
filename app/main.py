@@ -1,3 +1,4 @@
+import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -23,6 +24,8 @@ from app.modules.stock.router import router as stock_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    # Generate a fresh nonce every time the process starts.
+    app.state.boot_nonce = secrets.token_hex(16)
     yield
 
 
@@ -66,8 +69,8 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
     https_only=settings.ENVIRONMENT == "production",
-    same_site="lax",       # explicit: lax blocks CSRF from cross-site navigations
-    max_age=86400,         # 24-hour session lifetime
+    same_site="lax",
+    max_age=86400,
 )
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

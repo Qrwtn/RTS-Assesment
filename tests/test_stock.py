@@ -138,6 +138,90 @@ async def test_add_and_remove_favorite(client, db_session):
     assert resp.status_code == 303
 
 
+# ── HTMX favorite / unfavorite fragments ─────────────────────────────────────
+
+async def test_add_favorite_htmx_star_form(client):
+    """HTMX POST to /stock/favorite with HX-Target=star-form returns star+OOB fragment."""
+    await _signup_and_login(client, "htmx_add@test.com")
+
+    with patch("app.modules.stock.service.get_quote", new=AsyncMock(return_value=MOCK_QUOTE)), \
+         patch("app.modules.stock.service.get_favorites_with_prices", new=AsyncMock(return_value=[MOCK_QUOTE])):
+        resp = await client.post(
+            "/stock/favorite/AAPL",
+            headers={"HX-Request": "true", "HX-Target": "star-form"},
+        )
+
+    assert resp.status_code == 200
+    # Response contains the new star button (outerHTML swap) + OOB watchlist
+    assert b"star-form" in resp.content
+    assert b"watchlist-inner" in resp.content
+
+
+async def test_remove_favorite_htmx_watchlist(client):
+    """HTMX POST to /stock/unfavorite with HX-Target=watchlist-inner returns the list fragment."""
+    await _signup_and_login(client, "htmx_rm@test.com")
+
+    # Add first so there's something to remove
+    with patch("app.modules.stock.service.get_quote", new=AsyncMock(return_value=MOCK_QUOTE)):
+        await client.post("/stock/favorite/AAPL")
+
+    with patch("app.modules.stock.service.get_quote", new=AsyncMock(return_value=MOCK_QUOTE)), \
+         patch("app.modules.stock.service.get_favorites_with_prices", new=AsyncMock(return_value=[])):
+        resp = await client.post(
+            "/stock/unfavorite/AAPL",
+            headers={"HX-Request": "true", "HX-Target": "watchlist-inner"},
+        )
+
+    assert resp.status_code == 200
+    # Empty watchlist renders the empty-state message
+    assert b"Search a stock" in resp.content
+
+
+async def test_add_favorite_non_htmx_redirects(client):
+    """Non-HTMX POST to /stock/favorite still redirects 303 (JS-disabled fallback)."""
+    await _signup_and_login(client, "nhtmx@test.com")
+
+    with patch("app.modules.stock.service.get_quote", new=AsyncMock(return_value=MOCK_QUOTE)):
+        resp = await client.post("/stock/favorite/MSFT", follow_redirects=False)
+
+    assert resp.status_code == 303
+
+
+# ── Yahoo Finance symbol search ───────────────────────────────────────────────
+
+async def test_search_symbols_returns_results(client):
+    """GET /api/stock/search proxies Yahoo Finance and returns equity results."""
+    yahoo_payload = {
+        "quotes": [
+            {"symbol": "HMC", "shortname": "Honda Motor Co", "quoteType": "EQUITY"},
+            {"symbol": "TM",  "shortname": "Toyota Motor",    "quoteType": "EQUITY"},
+            {"symbol": "7267.T", "shortname": "Honda (Tokyo)", "quoteType": "EQUITY"},  # filtered out (has dot)
+        ]
+    }
+
+    with patch("httpx.AsyncClient.get") as mock_get:
+        mock_resp = AsyncMock()
+        mock_resp.raise_for_status = AsyncMock()
+        mock_resp.json.return_value = yahoo_payload
+        mock_get.return_value = mock_resp
+
+        resp = await client.get("/api/stock/search?q=honda")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    symbols = [r["symbol"] for r in data["results"]]
+    assert "HMC" in symbols
+    assert "TM" in symbols
+    assert "7267.T" not in symbols  # dot-containing symbols are filtered
+
+
+async def test_search_symbols_empty_query(client):
+    """Empty query returns an empty results list without hitting Yahoo."""
+    resp = await client.get("/api/stock/search?q=")
+    assert resp.status_code == 200
+    assert resp.json() == {"results": []}
+
+
 # ── Health check ──────────────────────────────────────────────────────────────
 
 async def test_health_endpoint(client):

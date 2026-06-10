@@ -1,0 +1,39 @@
+{% if favorites %}
+<div class="space-y-1.5">
+  {% for fav in favorites %}
+  <div class="flex items-center justify-between bg-white/60 hover:bg-white/80 rounded-xl px-3 py-2 transition">
+    <form method="POST" action="/stock/lookup" class="flex-1 min-w-0">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+      <input type="hidden" name="symbol" value="{{ fav.symbol }}" />
+      <button type="submit" class="font-mono font-bold text-slate-800 hover:text-blue-600 transition text-sm truncate">
+        {{ fav.symbol }}
+      </button>
+    </form>
+    <span class="sparkline-cell mx-2 flex-shrink-0" data-sparkline="{{ fav.symbol }}" data-change="{{ fav.percent_change if fav.percent_change is not none else 0 }}">
+      <svg width="64" height="24" viewBox="0 0 64 24" class="opacity-20">
+        <line x1="0" y1="12" x2="64" y2="12" stroke="#94a3b8" stroke-width="1" stroke-dasharray="2"/>
+      </svg>
+    </span>
+    {% if fav.current is not none %}
+    <span class="text-sm font-semibold {% if fav.percent_change >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">
+      ${{ "%.2f"|format(fav.current) }}
+    </span>
+    <span class="text-xs ml-1 {% if fav.percent_change >= 0 %}text-emerald-500{% else %}text-red-400{% endif %}">
+      {% if fav.percent_change >= 0 %}+{% endif %}{{ "%.2f"|format(fav.percent_change) }}%
+    </span>
+    {% endif %}
+    <form hx-post="/stock/unfavorite/{{ fav.symbol }}"
+          hx-target="#watchlist-inner"
+          hx-swap="innerHTML"
+          class="ml-2">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}" />
+      <button type="submit" class="text-slate-300 hover:text-red-400 transition">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-slate-400">Search a stock and click the star to track it here.</p>
+{% endif %}
