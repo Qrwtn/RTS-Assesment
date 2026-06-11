@@ -190,7 +190,8 @@ See `.env.example` for the full template. **Never commit `.env`.**
 
 ## CICD Pipeline
 
-![img.png](img.png)
+<img width="2616" height="1304" alt="DevOps" src="https://github.com/user-attachments/assets/75303dd7-24ce-442b-a049-76e866d85c4d" />
+
 
 ---
 
