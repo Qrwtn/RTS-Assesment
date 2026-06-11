@@ -192,12 +192,53 @@ See `.env.example` for the full template. **Never commit `.env`.**
 
 <img width="2616" height="1304" alt="DevOps" src="https://github.com/user-attachments/assets/75303dd7-24ce-442b-a049-76e866d85c4d" />
 
-The three lanes show the full lifecycle. The code leaves machine, gets validated by GitHub, and Railway takes it from there autonomously.
-A few things worth noting about how Railway's side works together:
-**Zero-downtime deploys**: Railway builds the new Docker image, waits for the /health endpoint to return OK on the new container, then swaps traffic over. The old container stays alive until the new one is healthy, so users never hit a restart.
-**Redis as the cache layer**: Every Finnhub/Yahoo Finance API call checks Redis first (60s TTL for quotes, 1hr for candles). This means under load, 10 simultaneous users looking up AAPL hit Redis once, not the external API 10 times. It also protects against rate limit errors from Finnhub's free tier.
-**Postgres on Railway**: Fully managed: automatic daily backups, connection pooling built in, and it lives on Railway's private network so it's never exposed to the public internet.
-**The fail path**: The red dashed line back to PR Review is the important one. If pytest fails or CodeQL flags something, the merge is blocked. Nothing reaches Railway unless all checks are green, which is the core guarantee of the whole flow.
+Deployment Lifecycle Overview
+
+The three lanes illustrate the complete deployment lifecycle:
+
+Code leaves the developer's machine.
+GitHub validates the changes through automated checks.
+Railway takes over and handles deployment autonomously.
+Key Components
+Zero-Downtime Deployments
+
+Railway builds a new Docker image and waits for the /health endpoint to return a successful response on the new container before switching traffic.
+
+The existing container remains online until the new deployment is confirmed healthy, ensuring users never experience downtime or service interruptions during a deployment.
+
+Redis as the Cache Layer
+
+Every Finnhub and Yahoo Finance API request checks Redis before calling an external service:
+
+Quote data: 60-second TTL
+Candle data: 1-hour TTL
+
+This dramatically reduces external API usage. For example, if 10 users simultaneously request data for AAPL, Redis serves the cached response rather than triggering 10 separate API calls.
+
+This approach also helps prevent rate-limit issues, particularly when using Finnhub's free tier.
+
+PostgreSQL on Railway
+
+PostgreSQL is fully managed by Railway and includes:
+
+Automatic daily backups
+Built-in connection pooling
+Private network access
+
+Because the database operates entirely within Railway's private network, it is never directly exposed to the public internet.
+
+Failure Path
+
+The red dashed line returning to PR Review is a critical part of the workflow.
+
+If:
+
+pytest fails, or
+CodeQL identifies a security or quality issue,
+
+the merge is blocked automatically.
+
+No code reaches Railway until every required check passes successfully. This guarantees that only validated, tested, and secure code can enter the deployment pipeline.
 ---
 
 ## Testing
