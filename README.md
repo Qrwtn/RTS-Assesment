@@ -1,4 +1,4 @@
-# RTS Labs code assesment
+# RTS Labs Code Assessment
 
 [![CI](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/ci.yml/badge.svg)](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/codeql.yml/badge.svg)](https://github.com/Qrwtn/RTS-Assesment/actions/workflows/codeql.yml)
@@ -6,7 +6,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
 ![Deployed on Railway](https://img.shields.io/badge/deployed-Railway-8B5CF6?logo=railway&logoColor=white)
 
-A full-stack stock market intelligence platform built for the Senior Software Engineer assessment for **RTS Labs**. Users can look up real-time quotes, track a personal watchlist, view price history charts, and receive AI-generated analysis powered by Claude and soured by reddit. It also includes an optional 2FA as security.
+A full-stack stock market intelligence platform built for the Senior Software Engineer assessment for **RTS Labs**. Users can look up real-time quotes, track a personal watchlist, view price history charts, and receive AI-generated analysis powered by Claude and sourced from Reddit. It also includes an optional 2FA as security.
 
 ---
 
@@ -33,9 +33,9 @@ A full-stack stock market intelligence platform built for the Senior Software En
 | **Database** | PostgreSQL 16 · Async SQLAlchemy 2.0 · asyncpg |
 | **Cache** | Redis 7 · cache-aside pattern with TTL keying |
 | **Auth** | bcrypt · Starlette SessionMiddleware · pyotp (TOTP) |
-| **AI** | Anthropic Claude Haiku (`claude-haiku-4-5`) |
+| **AI** | Anthropic Claude Haiku (`claude-haiku-4-5-20251001`) |
 | **External APIs** | Finnhub (quote, news, peers) · Yahoo Finance (candles, analyst targets) · ApeWisdom (Reddit mentions) |
-| **Frontend** | Jinja2 templates · Tailwind CSS (CDN) · Chart.js 4.4 · Lucide icons · marked.js |
+| **Frontend** | Jinja2 templates · Tailwind CSS (CDN) · HTMX 2.0 · Chart.js 4.4 · Lucide icons · marked.js |
 | **Rate Limiting** | slowapi (limits library, per-IP) |
 | **Testing** | pytest · pytest-asyncio · httpx AsyncClient · real Postgres (no mocks) |
 | **CI/CD** | GitHub Actions · CodeQL · Dependabot |

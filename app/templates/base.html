@@ -267,7 +267,36 @@
     }
 
     document.addEventListener('htmx:afterSwap', function(evt) {
-      if (evt.detail.target.id === 'watchlist-inner') _afterWatchlistSwap(evt.detail.target);
+      if (evt.detail.target.id === 'watchlist-inner') {
+        _afterWatchlistSwap(evt.detail.target);
+
+        // Sync the quote card star if the watchlist x-button unfavorited the displayed stock
+        const triggerUrl = evt.detail.elt?.getAttribute('hx-post') || '';
+        const removedMatch = triggerUrl.match(/\/stock\/unfavorite\/([A-Z]{1,10})/);
+        if (removedMatch) {
+          const removedSym = removedMatch[1];
+          const starForm = document.getElementById('star-form');
+          if (starForm && (starForm.getAttribute('hx-post') || '').endsWith('/unfavorite/' + removedSym)) {
+            // The displayed stock was just unfavorited — flip the star to outline
+            starForm.setAttribute('hx-post', '/stock/favorite/' + removedSym);
+            const btn = starForm.querySelector('button');
+            if (btn) {
+              btn.className = 'text-slate-300 hover:text-amber-400 transition';
+              btn.title = 'Add to watchlist';
+              const icon = btn.querySelector('i[data-lucide]');
+              if (icon) { icon.removeAttribute('style'); }
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [starForm] });
+            htmx.process(starForm);
+          }
+        }
+      }
+
+      // Re-render Lucide icons after the star button outerHTML swap
+      if (evt.detail.target.id === 'star-form') {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        htmx.process(evt.detail.target);
+      }
     });
 
     // OOB path: star button on quote card updates watchlist out-of-band
