@@ -623,6 +623,19 @@ function pickSymbol(sym) {
   document.getElementById('lookupForm').submit();
 }
 
+// If the dropdown is open when the form submits (button click or Enter),
+// resolve to the highlighted (or first) suggestion instead of the raw text.
+document.getElementById('lookupForm').addEventListener('submit', function(e) {
+  if (!suggestions.classList.contains('hidden')) {
+    const items = acItems();
+    const idx = acActiveIndex >= 0 ? acActiveIndex : 0;
+    if (items[idx]) {
+      e.preventDefault();
+      pickSymbol(items[idx].dataset.sym);
+    }
+  }
+});
+
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
