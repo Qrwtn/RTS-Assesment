@@ -1,6 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 
 import httpx
 
@@ -185,7 +188,8 @@ async def get_candle_data(symbol: str, period: str = "1M") -> dict | None:
             def fmt_label(ts: int) -> str:
                 dt = datetime.fromtimestamp(ts, tz=timezone.utc)
                 if cfg["fmt"] == "time":
-                    return dt.strftime("%-I%p").lower()   # e.g. "10am"
+                    # Convert to ET so x-axis shows market hours (9am–4pm), not UTC
+                    return dt.astimezone(_ET).strftime("%-I%p").lower()  # e.g. "10am"
                 elif cfg["fmt"] == "long":
                     return dt.strftime("%b '%y")           # e.g. "Jun '26"
                 else:
