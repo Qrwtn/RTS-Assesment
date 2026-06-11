@@ -1,14 +1,12 @@
 import asyncio
 import logging
+import httpx
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-
-_ET = ZoneInfo("America/New_York")
-
-import httpx
-
 from app.cache import cache_get, cache_set
 from app.config import settings
+
+_ET = ZoneInfo("America/New_York")
 
 log = logging.getLogger(__name__)
 
