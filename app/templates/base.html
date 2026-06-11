@@ -271,7 +271,12 @@
         _afterWatchlistSwap(evt.detail.target);
 
         // Sync the quote card star if the watchlist x-button unfavorited the displayed stock
-        const triggerUrl = evt.detail.elt?.getAttribute('hx-post') || '';
+        // Use xhr.responseURL — more reliable than elt.getAttribute('hx-post') because
+        // elt may be the <button> child, not the <form> that carries the hx-post attribute.
+        const triggerUrl = evt.detail.xhr?.responseURL
+          || evt.detail.elt?.getAttribute('hx-post')
+          || evt.detail.elt?.closest?.('[hx-post]')?.getAttribute('hx-post')
+          || '';
         const removedMatch = triggerUrl.match(/\/stock\/unfavorite\/([A-Z]{1,10})/);
         if (removedMatch) {
           const removedSym = removedMatch[1];
