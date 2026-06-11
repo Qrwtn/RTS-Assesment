@@ -28,14 +28,35 @@
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">Password</label>
-          <input type="password" name="password" id="passwordInput" required minlength="8"
-                 class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                 placeholder="At least 8 characters" />
+          <div class="relative">
+            <input type="password" name="password" id="passwordInput" required minlength="8"
+                   class="w-full border border-slate-300 rounded-lg px-4 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                   placeholder="At least 8 characters" />
+            <button type="button" id="togglePw" tabindex="-1"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+                    aria-label="Show password">
+              <i data-lucide="eye" class="w-4 h-4" id="togglePwIcon"></i>
+            </button>
+          </div>
           <!-- Password strength bar -->
           <div class="mt-2 h-1 rounded-full bg-slate-100 overflow-hidden">
             <div id="strengthBar" class="h-full rounded-full transition-all duration-300 w-0"></div>
           </div>
           <p id="strengthLabel" class="text-xs text-slate-400 mt-1"></p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Confirm Password</label>
+          <div class="relative">
+            <input type="password" id="confirmInput" required
+                   class="w-full border border-slate-300 rounded-lg px-4 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                   placeholder="Re-enter your password" />
+            <button type="button" id="toggleConfirm" tabindex="-1"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
+                    aria-label="Show confirm password">
+              <i data-lucide="eye" class="w-4 h-4" id="toggleConfirmIcon"></i>
+            </button>
+          </div>
+          <p id="confirmErr" class="text-xs text-red-500 mt-1 hidden">Passwords do not match.</p>
         </div>
         <button type="submit" id="submitBtn"
                 class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2.5 rounded-lg transition mt-2">
@@ -72,6 +93,35 @@ emailInput.addEventListener('input', () => {
   }
 });
 
+// Show/hide password toggles
+function makeToggle(btnId, inputId, iconId) {
+  const btn = document.getElementById(btnId);
+  const inp = document.getElementById(inputId);
+  const ico = document.getElementById(iconId);
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    ico.setAttribute('data-lucide', show ? 'eye-off' : 'eye');
+    lucide.createIcons({ nodes: [ico] });
+  });
+}
+makeToggle('togglePw',      'passwordInput', 'togglePwIcon');
+makeToggle('toggleConfirm', 'confirmInput',  'toggleConfirmIcon');
+
+// Confirm password validation
+const confirmInput = document.getElementById('confirmInput');
+const confirmErr   = document.getElementById('confirmErr');
+
+function checkConfirm() {
+  const mismatch = confirmInput.value && confirmInput.value !== pwInput.value;
+  confirmErr.classList.toggle('hidden', !mismatch);
+  confirmInput.classList.toggle('border-red-400', !!mismatch);
+  confirmInput.classList.toggle('border-slate-300', !mismatch);
+}
+confirmInput.addEventListener('input', checkConfirm);
+confirmInput.addEventListener('blur',  checkConfirm);
+
 // Password strength indicator
 const pwInput = document.getElementById('passwordInput');
 const bar = document.getElementById('strengthBar');
@@ -107,6 +157,13 @@ document.getElementById('signupForm').addEventListener('submit', function(e) {
     emailErr.classList.remove('hidden');
     emailInput.classList.add('border-red-400');
     emailInput.focus();
+    return;
+  }
+  if (confirmInput.value !== pwInput.value) {
+    e.preventDefault();
+    confirmErr.classList.remove('hidden');
+    confirmInput.classList.add('border-red-400');
+    confirmInput.focus();
     return;
   }
   const btn = document.getElementById('submitBtn');

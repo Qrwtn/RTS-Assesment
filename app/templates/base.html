@@ -163,6 +163,10 @@
 
   <!-- Live ticker JS -->
   <script>
+    function _esc(s) {
+      return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     async function loadTicker() {
       try {
         const res = await fetch('/api/market/ticker');
@@ -172,9 +176,9 @@
         const item = d => {
           const up = d.change >= 0;
           return `<span style="padding:0 20px;font-size:11px;color:#94a3b8;">` +
-            `<span style="color:#f1f5f9;font-weight:700;font-family:monospace;">${d.symbol}</span>` +
-            `<span style="color:#cbd5e1;margin:0 5px;">$${d.price.toFixed(2)}</span>` +
-            `<span style="color:${up?'#34d399':'#f87171'}">${up?'▲':'▼'} ${Math.abs(d.change).toFixed(2)}%</span>` +
+            `<span style="color:#f1f5f9;font-weight:700;font-family:monospace;">${_esc(d.symbol)}</span>` +
+            `<span style="color:#cbd5e1;margin:0 5px;">$${_esc(d.price.toFixed(2))}</span>` +
+            `<span style="color:${up?'#34d399':'#f87171'}">${up?'▲':'▼'} ${_esc(Math.abs(d.change).toFixed(2))}%</span>` +
             `</span>`;
         };
 
@@ -263,7 +267,36 @@
     }
 
     document.addEventListener('htmx:afterSwap', function(evt) {
-      if (evt.detail.target.id === 'watchlist-inner') _afterWatchlistSwap(evt.detail.target);
+      if (evt.detail.target.id === 'watchlist-inner') {
+        _afterWatchlistSwap(evt.detail.target);
+
+        // Sync the quote card star if the watchlist x-button unfavorited the displayed stock
+        const triggerUrl = evt.detail.elt?.getAttribute('hx-post') || '';
+        const removedMatch = triggerUrl.match(/\/stock\/unfavorite\/([A-Z]{1,10})/);
+        if (removedMatch) {
+          const removedSym = removedMatch[1];
+          const starForm = document.getElementById('star-form');
+          if (starForm && (starForm.getAttribute('hx-post') || '').endsWith('/unfavorite/' + removedSym)) {
+            // The displayed stock was just unfavorited — flip the star to outline
+            starForm.setAttribute('hx-post', '/stock/favorite/' + removedSym);
+            const btn = starForm.querySelector('button');
+            if (btn) {
+              btn.className = 'text-slate-300 hover:text-amber-400 transition';
+              btn.title = 'Add to watchlist';
+              const icon = btn.querySelector('i[data-lucide]');
+              if (icon) { icon.removeAttribute('style'); }
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [starForm] });
+            htmx.process(starForm);
+          }
+        }
+      }
+
+      // Re-render Lucide icons after the star button outerHTML swap
+      if (evt.detail.target.id === 'star-form') {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        htmx.process(evt.detail.target);
+      }
     });
 
     // OOB path: star button on quote card updates watchlist out-of-band
