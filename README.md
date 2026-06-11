@@ -192,7 +192,12 @@ See `.env.example` for the full template. **Never commit `.env`.**
 
 <img width="2616" height="1304" alt="DevOps" src="https://github.com/user-attachments/assets/75303dd7-24ce-442b-a049-76e866d85c4d" />
 
-
+The three lanes show the full lifecycle. The code leaves machine, gets validated by GitHub, and Railway takes it from there autonomously.
+A few things worth noting about how Railway's side works together:
+**Zero-downtime deploys**: Railway builds the new Docker image, waits for the /health endpoint to return OK on the new container, then swaps traffic over. The old container stays alive until the new one is healthy, so users never hit a restart.
+**Redis as the cache layer**: Every Finnhub/Yahoo Finance API call checks Redis first (60s TTL for quotes, 1hr for candles). This means under load, 10 simultaneous users looking up AAPL hit Redis once, not the external API 10 times. It also protects against rate limit errors from Finnhub's free tier.
+**Postgres on Railway**: Fully managed: automatic daily backups, connection pooling built in, and it lives on Railway's private network so it's never exposed to the public internet.
+**The fail path**: The red dashed line back to PR Review is the important one. If pytest fails or CodeQL flags something, the merge is blocked. Nothing reaches Railway unless all checks are green, which is the core guarantee of the whole flow.
 ---
 
 ## Testing
